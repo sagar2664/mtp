@@ -155,6 +155,26 @@ pytest tests/ -v --tb=short
 
 2. **Run all cells** to see the complete end-to-end pipeline.
 
+### Generate Visualizations
+
+Visualizations are automatically generated when running `bash scripts/run_all.sh`. To generate them separately:
+
+```bash
+python scripts/visualize_results.py
+```
+
+This creates comprehensive plots in `results/figures/`:
+- **Pareto Front**: 3D and 2D projections (Cost vs Emissions vs Resilience)
+- **Representative Solutions**: Comparison of Min Cost, Min Emissions, and Balanced solutions
+- **Network Topology**: Geographic layout of suppliers, factories, DCs, and customers
+- **Network Flows**: Flow visualization for each representative solution
+- **Demand Forecast**: Historical vs forecasted demand for each customer
+- **Simulation Results**: Resilience metrics and disruption statistics
+- **Forecast Accuracy**: MAE, RMSE, MAPE metrics
+- **Data Summary**: Capacity, cost, and demand distribution statistics
+- **Distance Heatmaps**: Distance matrices for all network arcs
+- **Congestion Analysis**: Traffic congestion factors across the network
+
 ## Running in GitHub Codespaces
 
 1. **Open the repository in Codespaces**:
@@ -189,15 +209,25 @@ pytest tests/ -v --tb=short
 
 After running `bash scripts/run_all.sh`, the `results/` directory will contain:
 
-- `flows_supplier_facility.csv` - Supplier to facility flow decisions
-- `flows_facility_customer.csv` - Facility to customer flow decisions
-- `inventory_levels.csv` - Inventory levels by facility and period
-- `analysis_summary.csv` - Summary analysis metrics
-- `simulation_results.csv` - Simulation output statistics
-- `experiment_summary.json` - Complete experiment summary
-- `network_visualization.png` - Network topology plot
-- `demand_forecast.png` - Demand forecasting visualization
-- `solution_metrics.png` - Solution metrics and KPIs
+**CSV Files:**
+- `pareto_front.csv` - All Pareto-optimal solutions
+- `flows_supplier_factory_*.csv` - Supplier to factory flows for each representative solution
+- `flows_factory_dc_*.csv` - Factory to DC flows for each representative solution
+- `flows_dc_customer_*.csv` - DC to customer flows for each representative solution
+- `experiment_summary.json` - Complete experiment summary with metrics
+
+**Visualization Files** (in `results/figures/`):
+- `pareto_front_3d.png` - 3D Pareto front visualization
+- `pareto_front_2d.png` - 2D projections (Cost vs Emissions, Cost vs Resilience, Emissions vs Resilience)
+- `representative_solutions.png` - Comparison of representative solutions
+- `network_topology.png` - Geographic network layout
+- `network_flows_*.png` - Flow visualization for each solution type
+- `demand_forecast.png` - Historical vs forecasted demand
+- `simulation_results.png` - Resilience metrics from simulation
+- `forecast_accuracy.png` - MAE, RMSE, MAPE metrics
+- `data_summary.png` - Generated data statistics
+- `distance_heatmaps.png` - Distance matrices as heatmaps
+- `congestion_analysis.png` - Traffic congestion factors
 
 ## Troubleshooting
 

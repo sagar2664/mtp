@@ -139,10 +139,13 @@ def generate_distance_matrix(
                 (supplier['latitude'], supplier['longitude']),
                 (factory['latitude'], factory['longitude'])
             ).kilometers
+            # Congestion factor > 1 inflates travel time/cost/emissions
+            congestion = np.random.uniform(1.0, 1.5)
             sf_distances.append({
                 'supplier_id': supplier['supplier_id'],
                 'factory_id': factory['factory_id'],
-                'distance_km': dist
+                'distance_km': dist,
+                'congestion_factor': congestion
             })
     distances['supplier_factory'] = pd.DataFrame(sf_distances)
     
@@ -154,10 +157,12 @@ def generate_distance_matrix(
                 (factory['latitude'], factory['longitude']),
                 (dc['latitude'], dc['longitude'])
             ).kilometers
+            congestion = np.random.uniform(1.0, 1.6)
             fd_distances.append({
                 'factory_id': factory['factory_id'],
                 'dc_id': dc['dc_id'],
-                'distance_km': dist
+                'distance_km': dist,
+                'congestion_factor': congestion
             })
     distances['factory_dc'] = pd.DataFrame(fd_distances)
     
@@ -169,12 +174,49 @@ def generate_distance_matrix(
                 (dc['latitude'], dc['longitude']),
                 (customer['latitude'], customer['longitude'])
             ).kilometers
+            congestion = np.random.uniform(1.0, 1.7)
             dc_distances.append({
                 'dc_id': dc['dc_id'],
                 'customer_id': customer['customer_id'],
-                'distance_km': dist
+                'distance_km': dist,
+                'congestion_factor': congestion
             })
     distances['dc_customer'] = pd.DataFrame(dc_distances)
     
     return distances
+
+
+def save_supply_chain_data(
+    data: Dict[str, pd.DataFrame],
+    distances: Dict[str, pd.DataFrame],
+    output_dir: str = './data'
+) -> None:
+    """
+    Save generated supply chain data and distance matrices to CSV files.
+
+    Args:
+        data: Dictionary with DataFrames for 'suppliers', 'factories', 'dcs', 'customers', 'demand'
+        distances: Dictionary with DataFrames for 'supplier_factory', 'factory_dc', 'dc_customer'
+        output_dir: Directory to write CSV files
+    """
+    import os
+    os.makedirs(output_dir, exist_ok=True)
+
+    if 'suppliers' in data:
+        data['suppliers'].to_csv(f"{output_dir}/suppliers.csv", index=False)
+    if 'factories' in data:
+        data['factories'].to_csv(f"{output_dir}/factories.csv", index=False)
+    if 'dcs' in data:
+        data['dcs'].to_csv(f"{output_dir}/dcs.csv", index=False)
+    if 'customers' in data:
+        data['customers'].to_csv(f"{output_dir}/customers.csv", index=False)
+    if 'demand' in data:
+        data['demand'].to_csv(f"{output_dir}/demand.csv", index=False)
+
+    if distances and 'supplier_factory' in distances:
+        distances['supplier_factory'].to_csv(f"{output_dir}/dist_supplier_factory.csv", index=False)
+    if distances and 'factory_dc' in distances:
+        distances['factory_dc'].to_csv(f"{output_dir}/dist_factory_dc.csv", index=False)
+    if distances and 'dc_customer' in distances:
+        distances['dc_customer'].to_csv(f"{output_dir}/dist_dc_customer.csv", index=False)
 

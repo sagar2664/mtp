@@ -22,6 +22,7 @@ class DisruptionSimulation:
         dcs: pd.DataFrame,
         customers: pd.DataFrame,
         flows: Dict,
+        distances: Dict = None,
         mttf: float = 365.0,  # Mean Time To Failure (days)
         mttr: float = 180.0,   # Mean Time To Recovery (days)
         seed: int = 42
@@ -45,6 +46,7 @@ class DisruptionSimulation:
         self.dcs = dcs.set_index('dc_id')
         self.customers = customers.set_index('customer_id')
         self.flows = flows
+        self.distances = distances or {}
         self.mttf = mttf
         self.mttr = mttr
         self.seed = seed
@@ -62,6 +64,20 @@ class DisruptionSimulation:
 
         # Rerouting efficiency (fraction of lost volume that can be reassigned to available DCs)
         self.reroute_efficiency = 0.5
+
+        # Precompute baseline congestion per DC from inbound (factory->DC) and outbound (DC->customer) arcs
+        self.dc_congestion_baseline = {k: 1.0 for k in self.dcs.index}
+        try:
+            if 'factory_dc' in self.distances:
+                for _, row in self.distances['factory_dc'].iterrows():
+                    k = row['dc_id']
+                    self.dc_congestion_baseline[k] = max(self.dc_congestion_baseline.get(k, 1.0), float(row.get('congestion_factor', 1.0)))
+            if 'dc_customer' in self.distances:
+                for _, row in self.distances['dc_customer'].iterrows():
+                    k = row['dc_id']
+                    self.dc_congestion_baseline[k] = max(self.dc_congestion_baseline.get(k, 1.0), float(row.get('congestion_factor', 1.0)))
+        except Exception:
+            pass
 
         # Statistics
         self.stats = {
@@ -171,6 +187,15 @@ class DisruptionSimulation:
                 else:
                     avail_in = sum(float(y.get((j, k), 0.0)) * factory_in_avail.get(j, 0.0) for j in self.factories.index)
                     dc_in_avail[k] = max(0.0, min(1.0, avail_in / total_in))
+
+            # Apply congestion impact: sample a congestion factor around baseline and convert to availability factor
+            for k in list(dc_in_avail.keys()):
+                base_cong = float(self.dc_congestion_baseline.get(k, 1.0))
+                # Random daily fluctuation
+                fluct = np.random.normal(loc=1.0, scale=0.1)
+                cong = max(1.0, min(2.0, base_cong * fluct))
+                cong_avail = 1.0 / cong  # Higher congestion -> lower availability
+                dc_in_avail[k] *= cong_avail
             
             # Available deliveries with simple rerouting per customer
             total_available = 0.0
@@ -372,6 +397,7 @@ def run_disruption_simulation(
     dcs: pd.DataFrame,
     customers: pd.DataFrame,
     flows: Dict,
+    distances: Dict = None,
     n_runs: int = 100,
     mttf: float = 365.0,
     mttr: float = 180.0,
@@ -400,7 +426,7 @@ def run_disruption_simulation(
     
     for run in range(n_runs):
         sim = DisruptionSimulation(
-            suppliers, factories, dcs, customers, flows,
+            suppliers, factories, dcs, customers, flows, distances,
             mttf=mttf, mttr=mttr, seed=seed + run
         )
         sim.run(max_time=max_time)

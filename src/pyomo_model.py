@@ -119,6 +119,11 @@ def create_multi_objective_model(
         initialize=sf_dist_dict,
         default=1000.0
     )
+    # Congestion factor for supplier->factory
+    sf_cong_dict = {}
+    for _, row in distances['supplier_factory'].iterrows():
+        sf_cong_dict[(row['supplier_id'], row['factory_id'])] = row.get('congestion_factor', 1.0)
+    model.sf_congestion = Param(model.I, model.J, initialize=sf_cong_dict, default=1.0)
     
     fd_dist_dict = {}
     for _, row in distances['factory_dc'].iterrows():
@@ -128,6 +133,10 @@ def create_multi_objective_model(
         initialize=fd_dist_dict,
         default=1000.0
     )
+    fd_cong_dict = {}
+    for _, row in distances['factory_dc'].iterrows():
+        fd_cong_dict[(row['factory_id'], row['dc_id'])] = row.get('congestion_factor', 1.0)
+    model.fd_congestion = Param(model.J, model.K, initialize=fd_cong_dict, default=1.0)
     
     dc_dist_dict = {}
     for _, row in distances['dc_customer'].iterrows():
@@ -137,6 +146,10 @@ def create_multi_objective_model(
         initialize=dc_dist_dict,
         default=1000.0
     )
+    dc_cong_dict = {}
+    for _, row in distances['dc_customer'].iterrows():
+        dc_cong_dict[(row['dc_id'], row['customer_id'])] = row.get('congestion_factor', 1.0)
+    model.dc_congestion = Param(model.K, model.L, initialize=dc_cong_dict, default=1.0)
     
     # Cost and emission parameters
     model.transport_cost_per_km = Param(initialize=0.1)  # $ per unit per km
@@ -196,15 +209,15 @@ def create_multi_objective_model(
             for j in model.J
         )
         transport_cost_sf = sum(
-            model.transport_cost_per_km * model.dist_sf[i, j] * model.x[i, j]
+            model.transport_cost_per_km * model.dist_sf[i, j] * model.sf_congestion[i, j] * model.x[i, j]
             for i in model.I for j in model.J
         )
         transport_cost_fd = sum(
-            model.transport_cost_per_km * model.dist_fd[j, k] * model.y[j, k]
+            model.transport_cost_per_km * model.dist_fd[j, k] * model.fd_congestion[j, k] * model.y[j, k]
             for j in model.J for k in model.K
         )
         transport_cost_dc = sum(
-            model.transport_cost_per_km * model.dist_dc[k, l] * model.z[k, l]
+            model.transport_cost_per_km * model.dist_dc[k, l] * model.dc_congestion[k, l] * model.z[k, l]
             for k in model.K for l in model.L
         )
         holding_cost = sum(
@@ -226,15 +239,15 @@ def create_multi_objective_model(
             for j in model.J
         )
         transport_emissions_sf = sum(
-            model.transport_emission_factor * model.dist_sf[i, j] * model.x[i, j]
+            model.transport_emission_factor * model.dist_sf[i, j] * model.sf_congestion[i, j] * model.x[i, j]
             for i in model.I for j in model.J
         )
         transport_emissions_fd = sum(
-            model.transport_emission_factor * model.dist_fd[j, k] * model.y[j, k]
+            model.transport_emission_factor * model.dist_fd[j, k] * model.fd_congestion[j, k] * model.y[j, k]
             for j in model.J for k in model.K
         )
         transport_emissions_dc = sum(
-            model.transport_emission_factor * model.dist_dc[k, l] * model.z[k, l]
+            model.transport_emission_factor * model.dist_dc[k, l] * model.dc_congestion[k, l] * model.z[k, l]
             for k in model.K for l in model.L
         )
         return supplier_emissions + production_emissions + transport_emissions_sf + transport_emissions_fd + transport_emissions_dc

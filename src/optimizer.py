@@ -151,7 +151,8 @@ class SupplyChainProblem(Problem):
         for (i, j), flow_val in flows['x'].items():
             if flow_val > 1e-6:
                 cost += self.model.supplier_cost[i] * flow_val
-                cost += self.model.transport_cost_per_km * self.model.dist_sf[i, j] * flow_val
+                # Congestion inflates effective distance/time
+                cost += self.model.transport_cost_per_km * self.model.dist_sf[i, j] * self.model.sf_congestion[i, j] * flow_val
         
         for (j, k), flow_val in flows['y'].items():
             if flow_val > 1e-6:
@@ -159,29 +160,29 @@ class SupplyChainProblem(Problem):
                 total_into_j = sum(flows['x'].get((i, j), 0) for i in self.model.I)
                 if total_into_j > 0:
                     cost += self.model.production_cost[j] * (flow_val / total_into_j) * sum(flows['x'].get((i, j), 0) for i in self.model.I)
-                cost += self.model.transport_cost_per_km * self.model.dist_fd[j, k] * flow_val
+                cost += self.model.transport_cost_per_km * self.model.dist_fd[j, k] * self.model.fd_congestion[j, k] * flow_val
         
         for (k, l), flow_val in flows['z'].items():
             if flow_val > 1e-6:
-                cost += self.model.transport_cost_per_km * self.model.dist_dc[k, l] * flow_val
+                cost += self.model.transport_cost_per_km * self.model.dist_dc[k, l] * self.model.dc_congestion[k, l] * flow_val
                 cost += self.model.holding_cost[k] * flow_val
         
         # Emissions calculation
         for (i, j), flow_val in flows['x'].items():
             if flow_val > 1e-6:
                 emissions += self.model.supplier_emission_factor[i] * flow_val
-                emissions += self.model.transport_emission_factor * self.model.dist_sf[i, j] * flow_val
+                emissions += self.model.transport_emission_factor * self.model.dist_sf[i, j] * self.model.sf_congestion[i, j] * flow_val
         
         for (j, k), flow_val in flows['y'].items():
             if flow_val > 1e-6:
                 total_into_j = sum(flows['x'].get((i, j), 0) for i in self.model.I)
                 if total_into_j > 0:
                     emissions += self.model.production_emission_factor[j] * flow_val
-                emissions += self.model.transport_emission_factor * self.model.dist_fd[j, k] * flow_val
+                emissions += self.model.transport_emission_factor * self.model.dist_fd[j, k] * self.model.fd_congestion[j, k] * flow_val
         
         for (k, l), flow_val in flows['z'].items():
             if flow_val > 1e-6:
-                emissions += self.model.transport_emission_factor * self.model.dist_dc[k, l] * flow_val
+                emissions += self.model.transport_emission_factor * self.model.dist_dc[k, l] * self.model.dc_congestion[k, l] * flow_val
         
         # Feasibility penalties
         # Supplier capacity

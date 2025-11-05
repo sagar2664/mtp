@@ -29,7 +29,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 import pandas as pd
 import numpy as np
 import json
-from src.data_gen import generate_supply_chain_data, generate_distance_matrix
+from src.data_gen import generate_supply_chain_data, generate_distance_matrix, save_supply_chain_data
 from src.forecasting import forecast_demand_random_forest
 from src.pyomo_model import create_multi_objective_model
 from src.optimizer import solve_with_nsga2, extract_representative_solutions
@@ -66,6 +66,13 @@ def main():
     print(f"  ✓ Supplier→Factory distances: {len(distances['supplier_factory'])} pairs")
     print(f"  ✓ Factory→DC distances: {len(distances['factory_dc'])} pairs")
     print(f"  ✓ DC→Customer distances: {len(distances['dc_customer'])} pairs")
+    
+    # Save raw generated data and distances to ./data
+    print("\n" + "=" * 60)
+    print("STEP 2.1: Saving generated data to ./data")
+    print("=" * 60)
+    save_supply_chain_data(data, distances, output_dir='./data')
+    print("  ✓ Data saved to ./data (CSV files)")
     
     print("\n" + "=" * 60)
     print("STEP 3: Forecasting demand using Random Forest")
@@ -159,6 +166,7 @@ def main():
             data['dcs'],
             data['customers'],
             flows,
+            distances,
             n_runs=100,
             mttf=1825.0,  # 5 years mean time to failure
             mttr=45.0,    # 45 days mean time to recovery
@@ -287,10 +295,25 @@ if [ $EXIT_CODE -eq 0 ]; then
     echo ""
     echo "Results available in: $RESULTS_DIR"
     echo ""
+    
+    # Optionally run visualization
+    if [ "${GENERATE_PLOTS:-1}" = "1" ]; then
+        echo "Generating visualizations..."
+        echo ""
+        VIS_SCRIPT="$(dirname "$0")/visualize_results.py"
+        if [ -f "$VIS_SCRIPT" ]; then
+            "$PYTHON_BIN" "$VIS_SCRIPT" 2>/dev/null || echo "  (Visualization skipped - may require matplotlib/seaborn)"
+        fi
+        echo ""
+    fi
+    
     echo "Next steps:"
     echo "  1. Review results/experiment_summary.json"
     echo "  2. Check Pareto front: results/pareto_front.csv"
     echo "  3. Analyze flow solutions: results/flows_*.csv"
+    if [ -d "$RESULTS_DIR/figures" ]; then
+        echo "  4. View visualizations: results/figures/*.png"
+    fi
     echo ""
 else
     echo ""
