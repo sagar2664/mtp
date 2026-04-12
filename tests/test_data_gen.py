@@ -14,7 +14,7 @@ def test_data_shapes():
         n_factories=2,
         n_dcs=3,
         n_customers=5,
-        n_periods=24,
+        n_periods=36,
         seed=42
     )
     
@@ -35,7 +35,7 @@ def test_data_shapes():
     # Check DCs
     assert 'dcs' in data
     assert len(data['dcs']) == 3
-    required_cols = ['dc_id', 'capacity', 'holding_cost', 'latitude', 'longitude']
+    required_cols = ['dc_id', 'capacity', 'holding_cost', 'latitude', 'longitude', 'warehousing_emission_factor']
     for col in required_cols:
         assert col in data['dcs'].columns
     
@@ -48,7 +48,7 @@ def test_data_shapes():
     
     # Check demand
     assert 'demand' in data
-    assert len(data['demand']) == 24 * 5  # n_periods * n_customers
+    assert len(data['demand']) == 36 * 5  # n_periods * n_customers
     required_cols = ['period', 'customer_id', 'demand']
     for col in required_cols:
         assert col in data['demand'].columns
@@ -86,21 +86,21 @@ def test_distance_matrix():
     assert 'factory_dc' in distances
     assert 'dc_customer' in distances
     
-    # Check supplier-factory distances
+    # Check supplier-factory distances (2 modes per pair: road + rail)
     sf_df = distances['supplier_factory']
-    assert len(sf_df) == len(data['suppliers']) * len(data['factories'])
+    assert len(sf_df) == len(data['suppliers']) * len(data['factories']) * 2
     assert 'distance_km' in sf_df.columns
     assert (sf_df['distance_km'] >= 0).all()
     
     # Check factory-DC distances
     fd_df = distances['factory_dc']
-    assert len(fd_df) == len(data['factories']) * len(data['dcs'])
+    assert len(fd_df) == len(data['factories']) * len(data['dcs']) * 2
     assert 'distance_km' in fd_df.columns
     assert (fd_df['distance_km'] >= 0).all()
     
     # Check DC-customer distances
     dc_df = distances['dc_customer']
-    assert len(dc_df) == len(data['dcs']) * len(data['customers'])
+    assert len(dc_df) == len(data['dcs']) * len(data['customers']) * 2
     assert 'distance_km' in dc_df.columns
     assert (dc_df['distance_km'] >= 0).all()
 

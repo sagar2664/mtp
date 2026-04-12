@@ -243,12 +243,12 @@ def main():
         with col_map:
             st.subheader(f"Logistics Map - {selected_label}")
             fig_map = draw_network_map(suppliers, factories, dcs, customers, sf_flows, fd_flows, dc_flows)
-            st.plotly_chart(fig_map, use_container_width=True)
+            st.plotly_chart(fig_map, width="stretch")
             
         with col_chart:
             st.subheader("Trade-off Space")
             fig_pareto = draw_3d_pareto(pareto, selected_solution)
-            st.plotly_chart(fig_pareto, use_container_width=True)
+            st.plotly_chart(fig_pareto, width="stretch")
             
             st.markdown("""
             **Map Legend:**
@@ -260,7 +260,7 @@ def main():
         st.subheader("Interactive Map Explorer")
         fig_map = draw_network_map(suppliers, factories, dcs, customers, sf_flows, fd_flows, dc_flows)
         fig_map.update_layout(height=700)
-        st.plotly_chart(fig_map, use_container_width=True)
+        st.plotly_chart(fig_map, width="stretch")
         
         # Display Flow Tables
         st.markdown("### Transport Mode Utilization")
@@ -285,13 +285,13 @@ def main():
             fig_bar = px.bar(flow_summary, x="stage", y="flow", color="mode", barmode="group",
                             color_discrete_map={'road': 'tomato', 'rail': 'dodgerblue'},
                             title="Volume Transported by Mode per Stage")
-            st.plotly_chart(fig_bar, use_container_width=True)
+            st.plotly_chart(fig_bar, width="stretch")
 
     elif view_mode == "Pareto Analysis":
         st.subheader("Multi-Objective Pareto Trade-offs")
         fig_pareto = draw_3d_pareto(pareto)
         fig_pareto.update_layout(height=800)
-        st.plotly_chart(fig_pareto, use_container_width=True)
+        st.plotly_chart(fig_pareto, width="stretch")
         
         # 2D Projections
         st.markdown("### 2D Projections")
@@ -299,11 +299,11 @@ def main():
         with col1:
             fig_2d1 = px.scatter(pareto, x='cost', y='emissions', color='resilience', 
                                 title='Cost vs Emissions')
-            st.plotly_chart(fig_2d1, use_container_width=True)
+            st.plotly_chart(fig_2d1, width="stretch")
         with col2:
             fig_2d2 = px.scatter(pareto, x='cost', y='resilience', color='emissions',
                                 title='Cost vs Resilience')
-            st.plotly_chart(fig_2d2, use_container_width=True)
+            st.plotly_chart(fig_2d2, width="stretch")
 
 if __name__ == "__main__":
     main()

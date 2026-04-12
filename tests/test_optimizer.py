@@ -15,7 +15,7 @@ def test_nsga2_output_format():
         n_factories=2,
         n_dcs=3,
         n_customers=5,
-        n_periods=6,
+        n_periods=36,
         seed=42
     )
     distances = generate_distance_matrix(

@@ -26,40 +26,55 @@
 
 ## Supply Chain Network Design Papers
 
-### 3. Multi-Objective Supply Chain Network Design
-**Paper:** (Example - find specific MDPI paper from your literature review)
-**Title:** "Multi-objective optimization of green supply chain network design considering resilience"
+### 3. Multi-Echelon Supply Chain Cost Structure
+**Paper:** Melo, M.T., Nickel, S., & Saldanha-da-Gama, F. (2009). Facility location and supply chain management — A review. *European Journal of Operational Research*, 196(2), 401–412.
 
 **What we reference:**
-- Multi-echelon supply chain network design (suppliers → factories → DCs → customers)
-- Conflicting objectives: cost minimization, emission reduction, resilience maximization
-- Flow-based optimization with capacity constraints
-- Used in `src/pyomo_model.py` - `create_multi_objective_model()` function
+- Multi-echelon SCND cost formulation (procurement + production + transport + holding)
+- Foundational 4-echelon cost objective structure
+- Used in `src/pyomo_model.py` — `cost_objective_rule()` and `src/optimizer.py` — `_evaluate_objectives()`
 
 ---
 
-### 4. Green Supply Chain Design
-**Paper:** (Example - find MDPI Sustainability journal paper)
-**Title:** "Carbon footprint optimization in multi-echelon supply chains"
+### 4. Green Supply Chain / LCA-Based Emission Model
+**Paper:** Pishvaee, M.S. & Razmi, J. (2012). Environmental supply chain network design using multi-objective fuzzy mathematical programming. *Applied Mathematical Modelling*, 36(8), 3433–3446.
 
 **What we reference:**
-- Integration of carbon emissions in supply chain optimization
-- Transport emissions calculation (kg CO2 per unit-km)
-- Production and supplier emission factors
-- Trade-off between cost and environmental impact
-- Used in cost and emissions objective functions in `src/pyomo_model.py`
+- Life Cycle Assessment (LCA) based emission model for supply chains
+- Facility-level emissions (supplier, production, DC warehousing)
+- DC warehousing emission factor concept
+- Used in `src/pyomo_model.py` — `emission_objective_rule()` and `src/optimizer.py` — warehouse emission computation
+
+**Supplementary Paper:** Pishvaee, M.S., Torabi, S.A., & Razmi, J. (2012). Credibility-based fuzzy mathematical programming model for green logistics design under uncertainty. *Computers & Industrial Engineering*, 62(2), 624–632.
+
+**What we reference for supplementary:**
+- Congestion-weighted transport emission factors
+- Mode-specific (Road vs. Rail) emission modeling
 
 ---
 
-### 5. Resilient Supply Chain Network Design
-**Paper:** (Example - find MDPI paper on resilience)
-**Title:** "Resilience metrics and disruption modeling in supply chain networks"
+### 5. Resilient Supply Chain — HHI Diversification
+**Paper:** Hasani, A. & Khosrojerdi, A. (2016). Robust global supply chain network design under disruption and uncertainty considering resilience strategies: A parallel memetic algorithm for a real-life case study. *Transportation Research Part E*, 87, 20–52.
 
 **What we reference:**
-- Resilience as worst-case demand coverage under disruptions
-- Single-node failure analysis
-- Diversification strategies for improved resilience
-- Used in `src/sim.py` - `calculate_resilience_score()` and `simulate_single_node_failure()`
+- Herfindahl-Hirschman Index (HHI) adapted to supply chain flow concentration
+- HHI-based diversification score for supply resilience
+- Multi-sourcing as resilience strategy
+- Used in `src/optimizer.py` — HHI diversification computation (Component A of resilience)
+
+**Supplementary Paper:** Snyder, L.V. & Daskin, M.S. (2005). Reliability models for facility location: The expected failure cost case. *Transportation Science*, 39(3), 400–416.
+
+**What we reference for supplementary:**
+- Expected demand coverage under single-node failure scenarios
+- Level-r backup assignment strategy for failure modeling
+- Used in `src/optimizer.py` — node failure coverage computation (Component B of resilience)
+
+**Supplementary Paper:** Jabbarzadeh, A., Fahimnia, B., & Sabouhi, F. (2018). Resilient and sustainable supply chain design: Sustainability analysis under disruption risks. *International Journal of Production Research*, 56(17), 5945–5968.
+
+**What we reference for supplementary:**
+- Unmet demand penalty in cost objective (shortage cost)
+- Integration of resilience into stochastic cost models
+- Used in `src/pyomo_model.py` and `src/optimizer.py` — shortage penalty (π = 500 $/unit)
 
 ---
 
@@ -226,18 +241,20 @@
 |---|----------------|-------------------|---------------|
 | 1 | Deb et al. (2002) - NSGA-II | Multi-objective genetic algorithm | `src/optimizer.py` |
 | 2 | Breiman (2001) - Random Forest | Demand forecasting | `src/forecasting.py` |
-| 3 | Multi-objective SCN design | Network design formulation | `src/pyomo_model.py` |
-| 4 | Green SCN papers | Emissions objective | `src/pyomo_model.py` |
-| 5 | Resilient SCN papers | Resilience metrics | `src/sim.py` |
+| 3 | Melo et al. (2009) - Cost structure | Multi-echelon cost formulation | `src/pyomo_model.py`, `src/optimizer.py` |
+| 4 | Pishvaee & Razmi (2012) - LCA emissions | Emission objective (incl. DC warehousing) | `src/pyomo_model.py`, `src/optimizer.py` |
+| 4b | Pishvaee, Torabi & Razmi (2012) - Congestion | Congestion-weighted transport emissions | `src/pyomo_model.py`, `src/optimizer.py` |
+| 5 | Hasani & Khosrojerdi (2016) - HHI | HHI diversification for resilience | `src/optimizer.py` |
+| 5b | Snyder & Daskin (2005) - Node failure | Expected node-failure demand coverage | `src/optimizer.py` |
+| 5c | Jabbarzadeh et al. (2018) - Shortage penalty | Unmet demand penalty in cost | `src/pyomo_model.py`, `src/optimizer.py` |
 | 6 | ML forecasting papers | Feature engineering | `src/forecasting.py` |
 | 7 | Regime shift papers | Demand generation | `src/data_gen.py` |
-| 8 | DES papers | Simulation framework | `src/sim.py` |
-| 9 | Resilience metrics papers | Resilience calculation | `src/sim.py` |
+| 8 | DES / SimPy | Simulation framework | `src/sim.py` |
+| 9 | Pettit et al. (2010) | Resilience definition | `src/sim.py` |
 | 10 | Hart et al. (2011) - Pyomo | Modeling framework | `src/pyomo_model.py` |
-| 11 | Pareto optimization papers | Solution selection | `src/optimizer.py` |
-| 12 | Congestion routing papers | Traffic modeling | `src/data_gen.py`, `src/pyomo_model.py` |
-| 13 | IPCC Guidelines | Emission factors | `src/pyomo_model.py` |
-| 14 | Haversine/Vincenty | Distance calculation | `src/data_gen.py` |
+| 11 | Fattahi et al. (2017) | Responsive-resilient SCND | `src/optimizer.py` |
+| 12 | IPCC Guidelines | Emission factors | `src/pyomo_model.py` |
+| 13 | Haversine/Vincenty | Distance calculation | `src/data_gen.py` |
 | 15 | Penalty methods papers | Constraint handling | `src/optimizer.py` |
 | 16 | Blank & Deb (2020) - pymoo | Optimization library | `src/optimizer.py` |
 | 17 | Pedregosa et al. (2011) - sklearn | ML library | `src/forecasting.py` |

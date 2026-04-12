@@ -14,7 +14,7 @@ def test_pyomo_model_creation():
         n_factories=2,
         n_dcs=3,
         n_customers=5,
-        n_periods=6,
+        n_periods=36,
         seed=42
     )
     distances = generate_distance_matrix(
@@ -58,7 +58,7 @@ def test_pyomo_model_variables():
         n_factories=2,
         n_dcs=3,
         n_customers=5,
-        n_periods=3,
+        n_periods=36,
         seed=42
     )
     distances = generate_distance_matrix(
@@ -120,3 +120,8 @@ def test_pyomo_model_parameters():
     # Check demand parameters
     for l in model.L:
         assert model.demand[l] >= 0
+    
+    # Check new paper-sourced parameters
+    for k in model.K:
+        assert model.dc_warehousing_emission[k] > 0  # Pishvaee & Razmi (2012)
+    assert model.shortage_penalty.value == 500.0  # Jabbarzadeh et al. (2018)
