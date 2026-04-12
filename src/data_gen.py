@@ -75,7 +75,8 @@ def generate_supply_chain_data(
         'capacity': np.random.uniform(250, 400, n_dcs),
         'holding_cost': np.random.uniform(2, 5, n_dcs),  # per unit per period
         'latitude': d_lats,
-        'longitude': d_lons
+        'longitude': d_lons,
+        'warehousing_emission_factor': np.random.uniform(0.005, 0.015, n_dcs)  # kg CO2 per unit (Pishvaee & Razmi, 2012)
     })
     
     # Generate customer data (C1-C5)

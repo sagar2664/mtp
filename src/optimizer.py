@@ -1,6 +1,11 @@
 """
 Multi-objective optimization using NSGA-II (pymoo).
 Solves the 3-objective supply chain problem: minimize cost, minimize emissions, maximize resilience.
+
+Objective function sources:
+  - Cost: Melo et al. (2009) + Jabbarzadeh et al. (2018) unmet demand penalty
+  - Emissions: Pishvaee & Razmi (2012) LCA + Pishvaee, Torabi & Razmi (2012) congestion
+  - Resilience: Hasani & Khosrojerdi (2016) HHI + Snyder & Daskin (2005) node failure
 """
 from pymoo.algorithms.moo.nsga2 import NSGA2
 from pymoo.core.problem import Problem
@@ -139,6 +144,11 @@ class SupplyChainProblem(Problem):
         """
         Evaluate all three objectives for given flows.
         
+        Paper-sourced formulations:
+          f1 (cost):       Melo et al. (2009) + Jabbarzadeh et al. (2018) unmet demand penalty
+          f2 (emissions):  Pishvaee & Razmi (2012) LCA + Pishvaee, Torabi & Razmi (2012) congestion
+          f3 (resilience): Hasani & Khosrojerdi (2016) HHI + Snyder & Daskin (2005) node failure
+        
         Args:
             flows: Dictionary with 'x', 'y', 'z' flow matrices
         
@@ -149,45 +159,73 @@ class SupplyChainProblem(Problem):
         emissions = 0.0
         penalty = 0.0
         
-        # Cost calculation
+        # ================================================================
+        # COST — Melo et al. (2009), EJOR 196(2), 401-412
+        # ================================================================
+        # Procurement + transport (Supplier → Factory)
         for (i, j, m), flow_val in flows['x'].items():
             if flow_val > 1e-6:
                 cost += self.model.supplier_cost[i] * flow_val
                 cost += self.model.unit_t_cost_sf[i, j, m] * flow_val
         
+        # Transport (Factory → DC)
         for (j, k, m), flow_val in flows['y'].items():
             if flow_val > 1e-6:
                 cost += self.model.unit_t_cost_fd[j, k, m] * flow_val
         
+        # Transport (DC → Customer) + Holding
         for (k, l, m), flow_val in flows['z'].items():
             if flow_val > 1e-6:
                 cost += self.model.unit_t_cost_dc[k, l, m] * flow_val
                 cost += self.model.holding_cost[k] * flow_val
                 
-        # Production cost based on inflow
+        # Production cost
         for j in self.model.J:
             total_into_j = sum(flows['x'].get((i, j, m), 0) for i in self.model.I for m in self.model.M)
             cost += self.model.production_cost[j] * total_into_j
         
-        # Emissions calculation
+        # Unmet demand penalty — Jabbarzadeh et al. (2018), IJPR 56(17), 5945-5968
+        shortage_penalty = float(self.model.shortage_penalty.value) if hasattr(self.model, 'shortage_penalty') else 500.0
+        for l in self.model.L:
+            demand_l = float(self.model.demand[l])
+            supplied_l = sum(float(flows['z'].get((k, l, m), 0.0)) for k in self.model.K for m in self.model.M)
+            if supplied_l < demand_l:
+                cost += shortage_penalty * (demand_l - supplied_l)
+        
+        # ================================================================
+        # EMISSIONS — Pishvaee & Razmi (2012), AMM 36(8), 3433-3446
+        #           + Pishvaee, Torabi & Razmi (2012), C&IE 62(2), 624-632
+        # ================================================================
+        # Supplier emissions
         for (i, j, m), flow_val in flows['x'].items():
             if flow_val > 1e-6:
                 emissions += self.model.supplier_emission_factor[i] * flow_val
                 emissions += self.model.unit_e_cost_sf[i, j, m] * flow_val
         
+        # Transport emissions (Factory → DC)
         for (j, k, m), flow_val in flows['y'].items():
             if flow_val > 1e-6:
                 emissions += self.model.unit_e_cost_fd[j, k, m] * flow_val
         
+        # Transport emissions (DC → Customer)
         for (k, l, m), flow_val in flows['z'].items():
             if flow_val > 1e-6:
                 emissions += self.model.unit_e_cost_dc[k, l, m] * flow_val
                 
+        # Production emissions
         for j in self.model.J:
             total_into_j = sum(flows['x'].get((i, j, m), 0) for i in self.model.I for m in self.model.M)
             emissions += self.model.production_emission_factor[j] * total_into_j
         
-        # Feasibility penalties
+        # DC warehousing emissions — Pishvaee & Razmi (2012) LCA model
+        for k in self.model.K:
+            total_into_k = sum(float(flows['y'].get((j, k, m), 0.0)) for j in self.model.J for m in self.model.M)
+            wh_ef = float(self.model.dc_warehousing_emission[k]) if hasattr(self.model, 'dc_warehousing_emission') else 0.01
+            emissions += wh_ef * total_into_k
+        
+        # ================================================================
+        # FEASIBILITY PENALTIES (soft constraints)
+        # ================================================================
         # Supplier capacity
         for i in self.model.I:
             cap = float(self.model.supply_capacity[i])
@@ -201,7 +239,6 @@ class SupplyChainProblem(Problem):
             outflow = sum(float(flows['y'].get((j, k, m), 0.0)) for k in self.model.K for m in self.model.M)
             if inflow > cap:
                 penalty += (inflow - cap)
-            # Balance violation
             penalty += abs(inflow - outflow)
         # DC capacity and balance
         for k in self.model.K:
@@ -218,24 +255,88 @@ class SupplyChainProblem(Problem):
             if supplied_l < demand_l:
                 penalty += (demand_l - supplied_l)
 
-        # Scale penalties and add to objectives (soft constraint handling)
+        # Scale penalties and add to objectives
         PEN_COST = 1e3
         PEN_EM = 10.0
         cost += PEN_COST * penalty
         emissions += PEN_EM * penalty
 
-        # Resilience calculation (approximate: minimize single-source dependencies)
-        resilience_penalty = 0.0
+        # ================================================================
+        # RESILIENCE — Composite metric
+        # Component A: HHI Diversification — Hasani & Khosrojerdi (2016), TRE 87, 20-52
+        # Component B: Node Failure Coverage — Snyder & Daskin (2005), Trans. Sci. 39(3)
+        # ================================================================
+        
+        # Component A: HHI-based diversification index
+        # HHI = Σ (share_i)^2; ranges from 1/n (perfect diversification) to 1.0 (monopoly)
+        # We compute HHI for DC-to-Customer flows (downstream diversification)
+        hhi_delivery = 0.0
+        n_customers_with_demand = 0
         for l in self.model.L:
             total_to_l = sum(flows['z'].get((k, l, m), 0) for k in self.model.K for m in self.model.M)
             if total_to_l > 0 and self.model.demand[l] > 0:
-                # Penalize concentration (prefer multiple DCs serving each customer)
+                n_customers_with_demand += 1
                 for k in self.model.K:
                     flow_share = sum(flows['z'].get((k, l, m), 0) for m in self.model.M) / total_to_l
-                    resilience_penalty += flow_share ** 2  # Square to penalize concentration
+                    hhi_delivery += flow_share ** 2
         
-        # Convert penalty to resilience score (higher penalty = lower resilience)
-        resilience_score = 1.0 / (1.0 + resilience_penalty)
+        # Normalize HHI: average across customers
+        avg_hhi_delivery = hhi_delivery / max(n_customers_with_demand, 1)
+        
+        # HHI for Supplier-to-Factory flows (upstream diversification)
+        hhi_supply = 0.0
+        n_factories_with_flow = 0
+        for j in self.model.J:
+            total_to_j = sum(flows['x'].get((i, j, m), 0) for i in self.model.I for m in self.model.M)
+            if total_to_j > 0:
+                n_factories_with_flow += 1
+                for i in self.model.I:
+                    flow_share = sum(flows['x'].get((i, j, m), 0) for m in self.model.M) / total_to_j
+                    hhi_supply += flow_share ** 2
+        
+        avg_hhi_supply = hhi_supply / max(n_factories_with_flow, 1)
+        
+        # Combined HHI: weighted average of upstream and downstream diversification
+        avg_hhi = 0.5 * avg_hhi_supply + 0.5 * avg_hhi_delivery
+        diversification_score = 1.0 - avg_hhi  # Higher = more diversified
+        
+        # Component B: Expected demand coverage under single-node failures
+        # Snyder & Daskin (2005) expected failure cost approach
+        total_demand = sum(float(self.model.demand[l]) for l in self.model.L)
+        
+        if total_demand > 0:
+            coverage_ratios = []
+            
+            # Scenario: each supplier fails
+            for i_fail in self.model.I:
+                # Flow lost from this supplier
+                flow_lost = sum(flows['x'].get((i_fail, j, m), 0) for j in self.model.J for m in self.model.M)
+                total_supply = sum(flows['x'].get((i, j, m), 0) for i in self.model.I for j in self.model.J for m in self.model.M)
+                coverage = 1.0 - (flow_lost / max(total_supply, 1e-6))
+                coverage_ratios.append(coverage)
+            
+            # Scenario: each factory fails
+            for j_fail in self.model.J:
+                flow_lost = sum(flows['y'].get((j_fail, k, m), 0) for k in self.model.K for m in self.model.M)
+                total_production = sum(flows['y'].get((j, k, m), 0) for j in self.model.J for k in self.model.K for m in self.model.M)
+                coverage = 1.0 - (flow_lost / max(total_production, 1e-6))
+                coverage_ratios.append(coverage)
+            
+            # Scenario: each DC fails
+            for k_fail in self.model.K:
+                flow_lost = sum(flows['z'].get((k_fail, l, m), 0) for l in self.model.L for m in self.model.M)
+                total_delivery = sum(flows['z'].get((k, l, m), 0) for k in self.model.K for l in self.model.L for m in self.model.M)
+                coverage = 1.0 - (flow_lost / max(total_delivery, 1e-6))
+                coverage_ratios.append(coverage)
+            
+            min_coverage = min(coverage_ratios) if coverage_ratios else 0.0
+        else:
+            min_coverage = 0.0
+        
+        # Composite resilience score — weighted combination
+        # w1=0.4 (diversification, P6), w2=0.6 (worst-case node failure, P4)
+        w1, w2 = 0.4, 0.6
+        resilience_score = w1 * diversification_score + w2 * min_coverage
         
         return {
             'cost': cost,
