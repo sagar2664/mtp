@@ -55,6 +55,7 @@ def create_multi_objective_model(
     model.J = Set(initialize=factories['factory_id'].tolist())   # Factories
     model.K = Set(initialize=dcs['dc_id'].tolist())              # Distribution Centers
     model.L = Set(initialize=customers['customer_id'].tolist())   # Customers
+    model.M = Set(initialize=['road', 'rail'])                   # Transport Modes
     
     # Parameters
     # Supplier parameters
@@ -110,90 +111,79 @@ def create_multi_objective_model(
         initialize=demand_dict
     )
     
-    # Distance parameters
-    sf_dist_dict = {}
+    # Distance and mode-specific parameters
+    t_cost_sf_dict = {}
+    e_cost_sf_dict = {}
     for _, row in distances['supplier_factory'].iterrows():
-        sf_dist_dict[(row['supplier_id'], row['factory_id'])] = row['distance_km']
-    model.dist_sf = Param(
-        model.I, model.J,
-        initialize=sf_dist_dict,
-        default=1000.0
-    )
-    # Congestion factor for supplier->factory
-    sf_cong_dict = {}
-    for _, row in distances['supplier_factory'].iterrows():
-        sf_cong_dict[(row['supplier_id'], row['factory_id'])] = row.get('congestion_factor', 1.0)
-    model.sf_congestion = Param(model.I, model.J, initialize=sf_cong_dict, default=1.0)
+        t_cost_sf_dict[(row['supplier_id'], row['factory_id'], row['mode'])] = \
+            row['distance_km'] * row['congestion_factor'] * row['transport_cost_per_km']
+        e_cost_sf_dict[(row['supplier_id'], row['factory_id'], row['mode'])] = \
+            row['distance_km'] * row['congestion_factor'] * row['carbon_emission_factor_km']
     
-    fd_dist_dict = {}
+    model.unit_t_cost_sf = Param(model.I, model.J, model.M, initialize=t_cost_sf_dict, default=9999.0)
+    model.unit_e_cost_sf = Param(model.I, model.J, model.M, initialize=e_cost_sf_dict, default=9999.0)
+    
+    t_cost_fd_dict = {}
+    e_cost_fd_dict = {}
     for _, row in distances['factory_dc'].iterrows():
-        fd_dist_dict[(row['factory_id'], row['dc_id'])] = row['distance_km']
-    model.dist_fd = Param(
-        model.J, model.K,
-        initialize=fd_dist_dict,
-        default=1000.0
-    )
-    fd_cong_dict = {}
-    for _, row in distances['factory_dc'].iterrows():
-        fd_cong_dict[(row['factory_id'], row['dc_id'])] = row.get('congestion_factor', 1.0)
-    model.fd_congestion = Param(model.J, model.K, initialize=fd_cong_dict, default=1.0)
+        t_cost_fd_dict[(row['factory_id'], row['dc_id'], row['mode'])] = \
+            row['distance_km'] * row['congestion_factor'] * row['transport_cost_per_km']
+        e_cost_fd_dict[(row['factory_id'], row['dc_id'], row['mode'])] = \
+            row['distance_km'] * row['congestion_factor'] * row['carbon_emission_factor_km']
+            
+    model.unit_t_cost_fd = Param(model.J, model.K, model.M, initialize=t_cost_fd_dict, default=9999.0)
+    model.unit_e_cost_fd = Param(model.J, model.K, model.M, initialize=e_cost_fd_dict, default=9999.0)
     
-    dc_dist_dict = {}
+    t_cost_dc_dict = {}
+    e_cost_dc_dict = {}
     for _, row in distances['dc_customer'].iterrows():
-        dc_dist_dict[(row['dc_id'], row['customer_id'])] = row['distance_km']
-    model.dist_dc = Param(
-        model.K, model.L,
-        initialize=dc_dist_dict,
-        default=1000.0
-    )
-    dc_cong_dict = {}
-    for _, row in distances['dc_customer'].iterrows():
-        dc_cong_dict[(row['dc_id'], row['customer_id'])] = row.get('congestion_factor', 1.0)
-    model.dc_congestion = Param(model.K, model.L, initialize=dc_cong_dict, default=1.0)
-    
-    # Cost and emission parameters
-    model.transport_cost_per_km = Param(initialize=0.1)  # $ per unit per km
-    model.transport_emission_factor = Param(initialize=0.02)  # kg CO2 per unit per km
+        t_cost_dc_dict[(row['dc_id'], row['customer_id'], row['mode'])] = \
+            row['distance_km'] * row['congestion_factor'] * row['transport_cost_per_km']
+        e_cost_dc_dict[(row['dc_id'], row['customer_id'], row['mode'])] = \
+            row['distance_km'] * row['congestion_factor'] * row['carbon_emission_factor_km']
+            
+    model.unit_t_cost_dc = Param(model.K, model.L, model.M, initialize=t_cost_dc_dict, default=9999.0)
+    model.unit_e_cost_dc = Param(model.K, model.L, model.M, initialize=e_cost_dc_dict, default=9999.0)
     
     # Decision Variables (flows)
-    model.x = Var(model.I, model.J, domain=NonNegativeReals)  # x_ij: supplier to factory
-    model.y = Var(model.J, model.K, domain=NonNegativeReals)  # y_jk: factory to DC
-    model.z = Var(model.K, model.L, domain=NonNegativeReals)   # z_kl: DC to customer
+    model.x = Var(model.I, model.J, model.M, domain=NonNegativeReals)  # x_ijm: supplier to factory
+    model.y = Var(model.J, model.K, model.M, domain=NonNegativeReals)  # y_jkm: factory to DC
+    model.z = Var(model.K, model.L, model.M, domain=NonNegativeReals)  # z_klm: DC to customer
     
     # Constraints
     
     # Supply capacity constraints
     def supply_limit_rule(model, i):
-        return sum(model.x[i, j] for j in model.J) <= model.supply_capacity[i]
+        return sum(model.x[i, j, m] for j in model.J for m in model.M) <= model.supply_capacity[i]
     model.supply_limit = Constraint(model.I, rule=supply_limit_rule)
     
     # Factory flow balance: inflow = outflow
     def factory_balance_rule(model, j):
-        inflow = sum(model.x[i, j] for i in model.I)
-        outflow = sum(model.y[j, k] for k in model.K)
+        inflow = sum(model.x[i, j, m] for i in model.I for m in model.M)
+        outflow = sum(model.y[j, k, m] for k in model.K for m in model.M)
         return inflow == outflow
     model.factory_balance = Constraint(model.J, rule=factory_balance_rule)
     
     # Factory capacity constraints
     def factory_capacity_rule(model, j):
-        return sum(model.x[i, j] for i in model.I) <= model.factory_capacity[j]
+        return sum(model.x[i, j, m] for i in model.I for m in model.M) <= model.factory_capacity[j]
     model.factory_capacity_constraint = Constraint(model.J, rule=factory_capacity_rule)
     
     # DC flow balance: inflow = outflow
     def dc_balance_rule(model, k):
-        inflow = sum(model.y[j, k] for j in model.J)
-        outflow = sum(model.z[k, l] for l in model.L)
+        inflow = sum(model.y[j, k, m] for j in model.J for m in model.M)
+        outflow = sum(model.z[k, l, m] for l in model.L for m in model.M)
         return inflow == outflow
     model.dc_balance = Constraint(model.K, rule=dc_balance_rule)
     
     # DC capacity constraints
     def dc_capacity_rule(model, k):
-        return sum(model.y[j, k] for j in model.J) <= model.dc_capacity[k]
+        return sum(model.y[j, k, m] for j in model.J for m in model.M) <= model.dc_capacity[k]
     model.dc_capacity_constraint = Constraint(model.K, rule=dc_capacity_rule)
     
     # Demand satisfaction
     def demand_satisfaction_rule(model, l):
-        return sum(model.z[k, l] for k in model.K) >= model.demand[l]
+        return sum(model.z[k, l, m] for k in model.K for m in model.M) >= model.demand[l]
     model.demand_satisfaction = Constraint(model.L, rule=demand_satisfaction_rule)
     
     # Objectives (defined separately for multi-objective solver)
@@ -201,27 +191,27 @@ def create_multi_objective_model(
     # Objective 1: Total Cost
     def cost_objective_rule(model):
         supplier_cost = sum(
-            model.supplier_cost[i] * model.x[i, j]
-            for i in model.I for j in model.J
+            model.supplier_cost[i] * model.x[i, j, m]
+            for i in model.I for j in model.J for m in model.M
         )
         production_cost = sum(
-            model.production_cost[j] * sum(model.x[i, j] for i in model.I)
+            model.production_cost[j] * sum(model.x[i, j, m] for i in model.I for m in model.M)
             for j in model.J
         )
         transport_cost_sf = sum(
-            model.transport_cost_per_km * model.dist_sf[i, j] * model.sf_congestion[i, j] * model.x[i, j]
-            for i in model.I for j in model.J
+            model.unit_t_cost_sf[i, j, m] * model.x[i, j, m]
+            for i in model.I for j in model.J for m in model.M
         )
         transport_cost_fd = sum(
-            model.transport_cost_per_km * model.dist_fd[j, k] * model.fd_congestion[j, k] * model.y[j, k]
-            for j in model.J for k in model.K
+            model.unit_t_cost_fd[j, k, m] * model.y[j, k, m]
+            for j in model.J for k in model.K for m in model.M
         )
         transport_cost_dc = sum(
-            model.transport_cost_per_km * model.dist_dc[k, l] * model.dc_congestion[k, l] * model.z[k, l]
-            for k in model.K for l in model.L
+            model.unit_t_cost_dc[k, l, m] * model.z[k, l, m]
+            for k in model.K for l in model.L for m in model.M
         )
         holding_cost = sum(
-            model.holding_cost[k] * sum(model.y[j, k] for j in model.J)
+            model.holding_cost[k] * sum(model.y[j, k, m] for j in model.J for m in model.M)
             for k in model.K
         )
         return supplier_cost + production_cost + transport_cost_sf + transport_cost_fd + transport_cost_dc + holding_cost
@@ -231,29 +221,27 @@ def create_multi_objective_model(
     # Objective 2: Total Emissions
     def emission_objective_rule(model):
         supplier_emissions = sum(
-            model.supplier_emission_factor[i] * model.x[i, j]
-            for i in model.I for j in model.J
+            model.supplier_emission_factor[i] * model.x[i, j, m]
+            for i in model.I for j in model.J for m in model.M
         )
         production_emissions = sum(
-            model.production_emission_factor[j] * sum(model.x[i, j] for i in model.I)
+            model.production_emission_factor[j] * sum(model.x[i, j, m] for i in model.I for m in model.M)
             for j in model.J
         )
         transport_emissions_sf = sum(
-            model.transport_emission_factor * model.dist_sf[i, j] * model.sf_congestion[i, j] * model.x[i, j]
-            for i in model.I for j in model.J
+            model.unit_e_cost_sf[i, j, m] * model.x[i, j, m]
+            for i in model.I for j in model.J for m in model.M
         )
         transport_emissions_fd = sum(
-            model.transport_emission_factor * model.dist_fd[j, k] * model.fd_congestion[j, k] * model.y[j, k]
-            for j in model.J for k in model.K
+            model.unit_e_cost_fd[j, k, m] * model.y[j, k, m]
+            for j in model.J for k in model.K for m in model.M
         )
         transport_emissions_dc = sum(
-            model.transport_emission_factor * model.dist_dc[k, l] * model.dc_congestion[k, l] * model.z[k, l]
-            for k in model.K for l in model.L
+            model.unit_e_cost_dc[k, l, m] * model.z[k, l, m]
+            for k in model.K for l in model.L for m in model.M
         )
         return supplier_emissions + production_emissions + transport_emissions_sf + transport_emissions_fd + transport_emissions_dc
     
-    # Note: Pyomo doesn't support multiple objectives directly.
-    # For NSGA-II, we'll evaluate these separately.
     model.emission_objective_expr = emission_objective_rule(model)
     
     # Objective 3: Resilience (minimize negative of minimum coverage)
@@ -263,7 +251,7 @@ def create_multi_objective_model(
         # Penalize solutions where customers depend on single DCs
         # Higher penalty = lower resilience
         penalty = sum(
-            (model.z[k, l] / model.demand[l]) ** 2  # Square to penalize concentration
+            (sum(model.z[k, l, m] for m in model.M) / model.demand[l]) ** 2  # Square to penalize concentration
             for k in model.K for l in model.L
             if model.demand[l] > 0
         )
@@ -289,13 +277,16 @@ def evaluate_objectives(model, flows_dict: Dict) -> Dict[str, float]:
     # Set flow values
     for i in model.I:
         for j in model.J:
-            model.x[i, j].set_value(flows_dict['x'][i, j])
+            for m in model.M:
+                model.x[i, j, m].set_value(flows_dict.get('x', {}).get((i, j, m), 0.0))
     for j in model.J:
         for k in model.K:
-            model.y[j, k].set_value(flows_dict['y'][j, k])
+            for m in model.M:
+                model.y[j, k, m].set_value(flows_dict.get('y', {}).get((j, k, m), 0.0))
     for k in model.K:
         for l in model.L:
-            model.z[k, l].set_value(flows_dict['z'][k, l])
+            for m in model.M:
+                model.z[k, l, m].set_value(flows_dict.get('z', {}).get((k, l, m), 0.0))
     
     cost = value(model.cost_objective)
     emissions = value(model.emission_objective_expr)

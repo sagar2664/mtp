@@ -52,11 +52,12 @@ class SupplyChainProblem(Problem):
         self.n_factories = len(model.J)
         self.n_dcs = len(model.K)
         self.n_customers = len(model.L)
+        self.n_modes = len(model.M)
         
         # Calculate variable indices
-        self.n_x = self.n_suppliers * self.n_factories
-        self.n_y = self.n_factories * self.n_dcs
-        self.n_z = self.n_dcs * self.n_customers
+        self.n_x = self.n_suppliers * self.n_factories * self.n_modes
+        self.n_y = self.n_factories * self.n_dcs * self.n_modes
+        self.n_z = self.n_dcs * self.n_customers * self.n_modes
         
     def _evaluate(self, X, out, *args, **kwargs):
         """
@@ -96,39 +97,40 @@ class SupplyChainProblem(Problem):
         
         # Reshape x into flows
         x_idx = 0
+        mode_list = list(self.model.M)
         
-        # x_ij: supplier to factory flows
+        # x_ijm: supplier to factory flows
         x_flows = {}
         supplier_list = list(self.model.I)
         factory_list = list(self.model.J)
         for i_idx, i in enumerate(supplier_list):
             for j_idx, j in enumerate(factory_list):
-                if x_idx < len(x):
-                    x_flows[(i, j)] = max(0, x[x_idx])
-                    x_idx += 1
-        
+                for m_idx, m in enumerate(mode_list):
+                    if x_idx < len(x):
+                        x_flows[(i, j, m)] = max(0, x[x_idx])
+                        x_idx += 1
         flows['x'] = x_flows
         
-        # y_jk: factory to DC flows
+        # y_jkm: factory to DC flows
         y_flows = {}
         dc_list = list(self.model.K)
         for j_idx, j in enumerate(factory_list):
             for k_idx, k in enumerate(dc_list):
-                if x_idx < len(x):
-                    y_flows[(j, k)] = max(0, x[x_idx])
-                    x_idx += 1
-        
+                for m_idx, m in enumerate(mode_list):
+                    if x_idx < len(x):
+                        y_flows[(j, k, m)] = max(0, x[x_idx])
+                        x_idx += 1
         flows['y'] = y_flows
         
-        # z_kl: DC to customer flows
+        # z_klm: DC to customer flows
         z_flows = {}
         customer_list = list(self.model.L)
         for k_idx, k in enumerate(dc_list):
             for l_idx, l in enumerate(customer_list):
-                if x_idx < len(x):
-                    z_flows[(k, l)] = max(0, x[x_idx])
-                    x_idx += 1
-        
+                for m_idx, m in enumerate(mode_list):
+                    if x_idx < len(x):
+                        z_flows[(k, l, m)] = max(0, x[x_idx])
+                        x_idx += 1
         flows['z'] = z_flows
         
         return flows
@@ -148,54 +150,55 @@ class SupplyChainProblem(Problem):
         penalty = 0.0
         
         # Cost calculation
-        for (i, j), flow_val in flows['x'].items():
+        for (i, j, m), flow_val in flows['x'].items():
             if flow_val > 1e-6:
                 cost += self.model.supplier_cost[i] * flow_val
-                # Congestion inflates effective distance/time
-                cost += self.model.transport_cost_per_km * self.model.dist_sf[i, j] * self.model.sf_congestion[i, j] * flow_val
+                cost += self.model.unit_t_cost_sf[i, j, m] * flow_val
         
-        for (j, k), flow_val in flows['y'].items():
+        for (j, k, m), flow_val in flows['y'].items():
             if flow_val > 1e-6:
-                # Production cost at factory
-                total_into_j = sum(flows['x'].get((i, j), 0) for i in self.model.I)
-                if total_into_j > 0:
-                    cost += self.model.production_cost[j] * (flow_val / total_into_j) * sum(flows['x'].get((i, j), 0) for i in self.model.I)
-                cost += self.model.transport_cost_per_km * self.model.dist_fd[j, k] * self.model.fd_congestion[j, k] * flow_val
+                cost += self.model.unit_t_cost_fd[j, k, m] * flow_val
         
-        for (k, l), flow_val in flows['z'].items():
+        for (k, l, m), flow_val in flows['z'].items():
             if flow_val > 1e-6:
-                cost += self.model.transport_cost_per_km * self.model.dist_dc[k, l] * self.model.dc_congestion[k, l] * flow_val
+                cost += self.model.unit_t_cost_dc[k, l, m] * flow_val
                 cost += self.model.holding_cost[k] * flow_val
+                
+        # Production cost based on inflow
+        for j in self.model.J:
+            total_into_j = sum(flows['x'].get((i, j, m), 0) for i in self.model.I for m in self.model.M)
+            cost += self.model.production_cost[j] * total_into_j
         
         # Emissions calculation
-        for (i, j), flow_val in flows['x'].items():
+        for (i, j, m), flow_val in flows['x'].items():
             if flow_val > 1e-6:
                 emissions += self.model.supplier_emission_factor[i] * flow_val
-                emissions += self.model.transport_emission_factor * self.model.dist_sf[i, j] * self.model.sf_congestion[i, j] * flow_val
+                emissions += self.model.unit_e_cost_sf[i, j, m] * flow_val
         
-        for (j, k), flow_val in flows['y'].items():
+        for (j, k, m), flow_val in flows['y'].items():
             if flow_val > 1e-6:
-                total_into_j = sum(flows['x'].get((i, j), 0) for i in self.model.I)
-                if total_into_j > 0:
-                    emissions += self.model.production_emission_factor[j] * flow_val
-                emissions += self.model.transport_emission_factor * self.model.dist_fd[j, k] * self.model.fd_congestion[j, k] * flow_val
+                emissions += self.model.unit_e_cost_fd[j, k, m] * flow_val
         
-        for (k, l), flow_val in flows['z'].items():
+        for (k, l, m), flow_val in flows['z'].items():
             if flow_val > 1e-6:
-                emissions += self.model.transport_emission_factor * self.model.dist_dc[k, l] * self.model.dc_congestion[k, l] * flow_val
+                emissions += self.model.unit_e_cost_dc[k, l, m] * flow_val
+                
+        for j in self.model.J:
+            total_into_j = sum(flows['x'].get((i, j, m), 0) for i in self.model.I for m in self.model.M)
+            emissions += self.model.production_emission_factor[j] * total_into_j
         
         # Feasibility penalties
         # Supplier capacity
         for i in self.model.I:
             cap = float(self.model.supply_capacity[i])
-            used = sum(float(flows['x'].get((i, j), 0.0)) for j in self.model.J)
+            used = sum(float(flows['x'].get((i, j, m), 0.0)) for j in self.model.J for m in self.model.M)
             if used > cap:
                 penalty += (used - cap)
         # Factory capacity and balance
         for j in self.model.J:
             cap = float(self.model.factory_capacity[j])
-            inflow = sum(float(flows['x'].get((i, j), 0.0)) for i in self.model.I)
-            outflow = sum(float(flows['y'].get((j, k), 0.0)) for k in self.model.K)
+            inflow = sum(float(flows['x'].get((i, j, m), 0.0)) for i in self.model.I for m in self.model.M)
+            outflow = sum(float(flows['y'].get((j, k, m), 0.0)) for k in self.model.K for m in self.model.M)
             if inflow > cap:
                 penalty += (inflow - cap)
             # Balance violation
@@ -203,15 +206,15 @@ class SupplyChainProblem(Problem):
         # DC capacity and balance
         for k in self.model.K:
             cap = float(self.model.dc_capacity[k])
-            inflow = sum(float(flows['y'].get((j, k), 0.0)) for j in self.model.J)
-            outflow = sum(float(flows['z'].get((k, l), 0.0)) for l in self.model.L)
+            inflow = sum(float(flows['y'].get((j, k, m), 0.0)) for j in self.model.J for m in self.model.M)
+            outflow = sum(float(flows['z'].get((k, l, m), 0.0)) for l in self.model.L for m in self.model.M)
             if inflow > cap:
                 penalty += (inflow - cap)
             penalty += abs(inflow - outflow)
         # Demand satisfaction
         for l in self.model.L:
             demand_l = float(self.model.demand[l])
-            supplied_l = sum(float(flows['z'].get((k, l), 0.0)) for k in self.model.K)
+            supplied_l = sum(float(flows['z'].get((k, l, m), 0.0)) for k in self.model.K for m in self.model.M)
             if supplied_l < demand_l:
                 penalty += (demand_l - supplied_l)
 
@@ -224,11 +227,11 @@ class SupplyChainProblem(Problem):
         # Resilience calculation (approximate: minimize single-source dependencies)
         resilience_penalty = 0.0
         for l in self.model.L:
-            total_to_l = sum(flows['z'].get((k, l), 0) for k in self.model.K)
+            total_to_l = sum(flows['z'].get((k, l, m), 0) for k in self.model.K for m in self.model.M)
             if total_to_l > 0 and self.model.demand[l] > 0:
                 # Penalize concentration (prefer multiple DCs serving each customer)
                 for k in self.model.K:
-                    flow_share = flows['z'].get((k, l), 0) / total_to_l
+                    flow_share = sum(flows['z'].get((k, l, m), 0) for m in self.model.M) / total_to_l
                     resilience_penalty += flow_share ** 2  # Square to penalize concentration
         
         # Convert penalty to resilience score (higher penalty = lower resilience)
@@ -264,11 +267,12 @@ def solve_with_nsga2(
     n_factories = len(model.J)
     n_dcs = len(model.K)
     n_customers = len(model.L)
+    n_modes = len(model.M)
     
     n_vars = (
-        n_suppliers * n_factories +  # x_ij
-        n_factories * n_dcs +        # y_jk
-        n_dcs * n_customers          # z_kl
+        n_suppliers * n_factories * n_modes +  # x_ijm
+        n_factories * n_dcs * n_modes +        # y_jkm
+        n_dcs * n_customers * n_modes          # z_klm
     )
     
     # Estimate upper bound (total demand * safety factor)

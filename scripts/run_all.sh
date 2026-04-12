@@ -200,23 +200,23 @@ def main():
             
             # Save flows
             x_flows = []
-            for (i, j), val in sol['flows']['x'].items():
+            for (i, j, m), val in sol['flows']['x'].items():
                 if val > 1e-6:
-                    x_flows.append({'supplier': i, 'factory': j, 'flow': val})
+                    x_flows.append({'supplier': i, 'factory': j, 'mode': m, 'flow': val})
             if x_flows:
                 pd.DataFrame(x_flows).to_csv(f'./results/flows_supplier_factory_{label}.csv', index=False)
             
             y_flows = []
-            for (j, k), val in sol['flows']['y'].items():
+            for (j, k, m), val in sol['flows']['y'].items():
                 if val > 1e-6:
-                    y_flows.append({'factory': j, 'dc': k, 'flow': val})
+                    y_flows.append({'factory': j, 'dc': k, 'mode': m, 'flow': val})
             if y_flows:
                 pd.DataFrame(y_flows).to_csv(f'./results/flows_factory_dc_{label}.csv', index=False)
             
             z_flows = []
-            for (k, l), val in sol['flows']['z'].items():
+            for (k, l, m), val in sol['flows']['z'].items():
                 if val > 1e-6:
-                    z_flows.append({'dc': k, 'customer': l, 'flow': val})
+                    z_flows.append({'dc': k, 'customer': l, 'mode': m, 'flow': val})
             if z_flows:
                 pd.DataFrame(z_flows).to_csv(f'./results/flows_dc_customer_{label}.csv', index=False)
         
@@ -314,6 +314,7 @@ if [ $EXIT_CODE -eq 0 ]; then
     if [ -d "$RESULTS_DIR/figures" ]; then
         echo "  4. View visualizations: results/figures/*.png"
     fi
+    echo "  5. Launch Dashboard: streamlit run src/dashboard.py"
     echo ""
 else
     echo ""

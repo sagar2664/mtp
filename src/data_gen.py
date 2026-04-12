@@ -31,13 +31,31 @@ def generate_supply_chain_data(
     """
     np.random.seed(seed)
     
+    # Pre-defined Indian auto hubs coordinates (lat, lon)
+    supplier_hubs = [(18.52, 73.85), (13.08, 80.27), (28.35, 76.94)] # Pune, Chennai, Manesar
+    factory_hubs = [(22.98, 72.38), (28.45, 77.02)] # Sanand (Gujarat), Gurugram (Haryana)
+    dc_hubs = [(28.70, 77.10), (19.07, 72.87), (12.97, 77.59), (22.57, 88.36)] # Delhi, Mumbai, Bangalore, Kolkata
+    customer_hubs = [(26.85, 80.95), (21.15, 79.09), (17.38, 78.48), (23.02, 72.57), (11.02, 76.96)] # Lucknow, Nagpur, Hyderabad, Ahmedabad, Coimbatore
+
+    def get_coords(hubs, n):
+        coords = [hubs[i % len(hubs)] for i in range(n)]
+        # Add small noise to prevent exact overlapping
+        lats = [c[0] + np.random.uniform(-0.1, 0.1) for c in coords]
+        lons = [c[1] + np.random.uniform(-0.1, 0.1) for c in coords]
+        return lats, lons
+
+    s_lats, s_lons = get_coords(supplier_hubs, n_suppliers)
+    f_lats, f_lons = get_coords(factory_hubs, n_factories)
+    d_lats, d_lons = get_coords(dc_hubs, n_dcs)
+    c_lats, c_lons = get_coords(customer_hubs, n_customers)
+    
     # Generate supplier data (S1, S2, S3)
     suppliers = pd.DataFrame({
         'supplier_id': [f'S{i+1}' for i in range(n_suppliers)],
         'capacity': np.random.uniform(200, 400, n_suppliers),
         'cost_per_unit': np.random.uniform(10, 30, n_suppliers),
-        'latitude': np.random.uniform(20, 25, n_suppliers),  # India coordinates
-        'longitude': np.random.uniform(75, 85, n_suppliers),
+        'latitude': s_lats,
+        'longitude': s_lons,
         'carbon_emission_factor': np.random.uniform(0.01, 0.03, n_suppliers)  # kg CO2 per unit
     })
     
@@ -46,8 +64,8 @@ def generate_supply_chain_data(
         'factory_id': [f'F{i+1}' for i in range(n_factories)],
         'capacity': np.random.uniform(300, 500, n_factories),
         'production_cost': np.random.uniform(40, 60, n_factories),  # per unit
-        'latitude': np.random.uniform(20, 25, n_factories),
-        'longitude': np.random.uniform(75, 85, n_factories),
+        'latitude': f_lats,
+        'longitude': f_lons,
         'production_emission_factor': np.random.uniform(0.02, 0.05, n_factories)  # kg CO2 per unit
     })
     
@@ -56,15 +74,15 @@ def generate_supply_chain_data(
         'dc_id': [f'D{i+1}' for i in range(n_dcs)],
         'capacity': np.random.uniform(250, 400, n_dcs),
         'holding_cost': np.random.uniform(2, 5, n_dcs),  # per unit per period
-        'latitude': np.random.uniform(20, 25, n_dcs),
-        'longitude': np.random.uniform(75, 85, n_dcs)
+        'latitude': d_lats,
+        'longitude': d_lons
     })
     
     # Generate customer data (C1-C5)
     customers = pd.DataFrame({
         'customer_id': [f'C{i+1}' for i in range(n_customers)],
-        'latitude': np.random.uniform(18, 28, n_customers),
-        'longitude': np.random.uniform(72, 88, n_customers),
+        'latitude': c_lats,
+        'longitude': c_lons,
         'service_level': np.random.uniform(0.90, 0.98, n_customers)
     })
     
@@ -131,7 +149,7 @@ def generate_distance_matrix(
     
     distances = {}
     
-    # Supplier to Factory distances (x_ij)
+    # Supplier to Factory distances (x_ijm)
     sf_distances = []
     for _, supplier in suppliers.iterrows():
         for _, factory in factories.iterrows():
@@ -139,17 +157,31 @@ def generate_distance_matrix(
                 (supplier['latitude'], supplier['longitude']),
                 (factory['latitude'], factory['longitude'])
             ).kilometers
-            # Congestion factor > 1 inflates travel time/cost/emissions
-            congestion = np.random.uniform(1.0, 1.5)
+            
+            # Mode: Road
             sf_distances.append({
                 'supplier_id': supplier['supplier_id'],
                 'factory_id': factory['factory_id'],
-                'distance_km': dist,
-                'congestion_factor': congestion
+                'mode': 'road',
+                'distance_km': dist * 1.2, # Road tortuosity
+                'congestion_factor': np.random.uniform(1.0, 1.5),
+                'transport_cost_per_km': 0.1,
+                'carbon_emission_factor_km': 0.02
+            })
+            
+            # Mode: Rail
+            sf_distances.append({
+                'supplier_id': supplier['supplier_id'],
+                'factory_id': factory['factory_id'],
+                'mode': 'rail',
+                'distance_km': dist * 1.05, # Rail is straighter
+                'congestion_factor': np.random.uniform(1.0, 1.1),
+                'transport_cost_per_km': 0.04,
+                'carbon_emission_factor_km': 0.005
             })
     distances['supplier_factory'] = pd.DataFrame(sf_distances)
     
-    # Factory to DC distances (y_jk)
+    # Factory to DC distances (y_jkm)
     fd_distances = []
     for _, factory in factories.iterrows():
         for _, dc in dcs.iterrows():
@@ -157,16 +189,31 @@ def generate_distance_matrix(
                 (factory['latitude'], factory['longitude']),
                 (dc['latitude'], dc['longitude'])
             ).kilometers
-            congestion = np.random.uniform(1.0, 1.6)
+            
+            # Mode: Road
             fd_distances.append({
                 'factory_id': factory['factory_id'],
                 'dc_id': dc['dc_id'],
-                'distance_km': dist,
-                'congestion_factor': congestion
+                'mode': 'road',
+                'distance_km': dist * 1.2,
+                'congestion_factor': np.random.uniform(1.0, 1.6),
+                'transport_cost_per_km': 0.1,
+                'carbon_emission_factor_km': 0.02
+            })
+            
+            # Mode: Rail
+            fd_distances.append({
+                'factory_id': factory['factory_id'],
+                'dc_id': dc['dc_id'],
+                'mode': 'rail',
+                'distance_km': dist * 1.05,
+                'congestion_factor': np.random.uniform(1.0, 1.1),
+                'transport_cost_per_km': 0.04,
+                'carbon_emission_factor_km': 0.005
             })
     distances['factory_dc'] = pd.DataFrame(fd_distances)
     
-    # DC to Customer distances (z_kl)
+    # DC to Customer distances (z_klm)
     dc_distances = []
     for _, dc in dcs.iterrows():
         for _, customer in customers.iterrows():
@@ -174,12 +221,28 @@ def generate_distance_matrix(
                 (dc['latitude'], dc['longitude']),
                 (customer['latitude'], customer['longitude'])
             ).kilometers
-            congestion = np.random.uniform(1.0, 1.7)
+            
+            # Last-mile is assumed to be road only, but we'll include rail with high cost to let model decide
+            # or just include mode='road' and mode='rail' to keep index dimensions consistent.
+            
             dc_distances.append({
                 'dc_id': dc['dc_id'],
                 'customer_id': customer['customer_id'],
-                'distance_km': dist,
-                'congestion_factor': congestion
+                'mode': 'road',
+                'distance_km': dist * 1.2,
+                'congestion_factor': np.random.uniform(1.0, 1.7),
+                'transport_cost_per_km': 0.15, # Last mile is more expensive
+                'carbon_emission_factor_km': 0.025
+            })
+            
+            dc_distances.append({
+                'dc_id': dc['dc_id'],
+                'customer_id': customer['customer_id'],
+                'mode': 'rail',
+                'distance_km': dist * 1.05,
+                'congestion_factor': np.random.uniform(1.0, 1.1),
+                'transport_cost_per_km': 0.8, # Very un-economical for last-mile
+                'carbon_emission_factor_km': 0.01
             })
     distances['dc_customer'] = pd.DataFrame(dc_distances)
     

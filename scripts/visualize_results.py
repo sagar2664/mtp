@@ -290,8 +290,9 @@ def plot_network_with_flows(solution_label='min_cost'):
     
     # Plot flows - Supplier to Factory
     if len(sf_flows) > 0:
-        max_flow = sf_flows['flow'].max()
-        for _, flow in sf_flows.iterrows():
+        sf_agg = sf_flows.groupby(['supplier', 'factory'])['flow'].sum().reset_index()
+        max_flow = sf_agg['flow'].max()
+        for _, flow in sf_agg.iterrows():
             try:
                 supplier = suppliers[suppliers['supplier_id'] == flow['supplier']].iloc[0]
                 factory = factories[factories['factory_id'] == flow['factory']].iloc[0]
@@ -304,8 +305,9 @@ def plot_network_with_flows(solution_label='min_cost'):
     
     # Plot flows - Factory to DC
     if len(fd_flows) > 0:
-        max_flow = fd_flows['flow'].max()
-        for _, flow in fd_flows.iterrows():
+        fd_agg = fd_flows.groupby(['factory', 'dc'])['flow'].sum().reset_index()
+        max_flow = fd_agg['flow'].max()
+        for _, flow in fd_agg.iterrows():
             try:
                 factory = factories[factories['factory_id'] == flow['factory']].iloc[0]
                 dc = dcs[dcs['dc_id'] == flow['dc']].iloc[0]
@@ -318,8 +320,9 @@ def plot_network_with_flows(solution_label='min_cost'):
     
     # Plot flows - DC to Customer
     if len(dc_flows) > 0:
-        max_flow = dc_flows['flow'].max()
-        for _, flow in dc_flows.iterrows():
+        dc_agg = dc_flows.groupby(['dc', 'customer'])['flow'].sum().reset_index()
+        max_flow = dc_agg['flow'].max()
+        for _, flow in dc_agg.iterrows():
             try:
                 dc = dcs[dcs['dc_id'] == flow['dc']].iloc[0]
                 customer = customers[customers['customer_id'] == flow['customer']].iloc[0]
@@ -581,6 +584,8 @@ def plot_distance_heatmaps():
     
     # Supplier-Factory distances
     ax = axes[0]
+    if 'mode' in dist_sf.columns:
+        dist_sf = dist_sf[dist_sf['mode'] == 'road']
     sf_pivot = dist_sf.pivot(index='supplier_id', columns='factory_id', values='distance_km')
     sns.heatmap(sf_pivot, annot=True, fmt='.1f', cmap='YlOrRd', ax=ax, cbar_kws={'label': 'Distance (km)'})
     ax.set_title('Supplier → Factory Distances', fontsize=12, fontweight='bold')
@@ -589,6 +594,8 @@ def plot_distance_heatmaps():
     
     # Factory-DC distances
     ax = axes[1]
+    if 'mode' in dist_fd.columns:
+        dist_fd = dist_fd[dist_fd['mode'] == 'road']
     fd_pivot = dist_fd.pivot(index='factory_id', columns='dc_id', values='distance_km')
     sns.heatmap(fd_pivot, annot=True, fmt='.1f', cmap='YlGnBu', ax=ax, cbar_kws={'label': 'Distance (km)'})
     ax.set_title('Factory → DC Distances', fontsize=12, fontweight='bold')
@@ -597,6 +604,8 @@ def plot_distance_heatmaps():
     
     # DC-Customer distances
     ax = axes[2]
+    if 'mode' in dist_dc.columns:
+        dist_dc = dist_dc[dist_dc['mode'] == 'road']
     dc_pivot = dist_dc.pivot(index='dc_id', columns='customer_id', values='distance_km')
     sns.heatmap(dc_pivot, annot=True, fmt='.1f', cmap='RdPu', ax=ax, cbar_kws={'label': 'Distance (km)'})
     ax.set_title('DC → Customer Distances', fontsize=12, fontweight='bold')
@@ -632,6 +641,8 @@ def plot_congestion_analysis():
     
     # Supplier-Factory congestion
     ax = axes[0]
+    if 'mode' in dist_sf.columns:
+        dist_sf = dist_sf[dist_sf['mode'] == 'road']
     sf_pivot = dist_sf.pivot(index='supplier_id', columns='factory_id', values='congestion_factor')
     sns.heatmap(sf_pivot, annot=True, fmt='.2f', cmap='Reds', ax=ax, 
                cbar_kws={'label': 'Congestion Factor'}, vmin=1.0, vmax=2.0)
@@ -641,6 +652,8 @@ def plot_congestion_analysis():
     
     # Factory-DC congestion
     ax = axes[1]
+    if 'mode' in dist_fd.columns:
+        dist_fd = dist_fd[dist_fd['mode'] == 'road']
     fd_pivot = dist_fd.pivot(index='factory_id', columns='dc_id', values='congestion_factor')
     sns.heatmap(fd_pivot, annot=True, fmt='.2f', cmap='Oranges', ax=ax,
                cbar_kws={'label': 'Congestion Factor'}, vmin=1.0, vmax=2.0)
@@ -650,6 +663,8 @@ def plot_congestion_analysis():
     
     # DC-Customer congestion
     ax = axes[2]
+    if 'mode' in dist_dc.columns:
+        dist_dc = dist_dc[dist_dc['mode'] == 'road']
     dc_pivot = dist_dc.pivot(index='dc_id', columns='customer_id', values='congestion_factor')
     sns.heatmap(dc_pivot, annot=True, fmt='.2f', cmap='YlOrRd', ax=ax,
                cbar_kws={'label': 'Congestion Factor'}, vmin=1.0, vmax=2.0)

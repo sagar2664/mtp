@@ -6,9 +6,9 @@
 
 ## Abstract
 
-This thesis addresses the critical challenge of designing supply chain networks that simultaneously optimize economic performance, environmental sustainability, and operational resilience. Traditional supply chain optimization approaches focus on single objectives, typically cost minimization, overlooking the inherent trade-offs between economic efficiency, carbon footprint reduction, and the ability to withstand disruptions. We propose a multi-objective optimization framework that integrates artificial intelligence techniques—specifically machine learning for demand forecasting and evolutionary algorithms for Pareto-optimal solution generation—to design a green and resilient 4-echelon supply chain network.
+This thesis addresses the critical challenge of designing supply chain networks that simultaneously optimize economic performance, environmental sustainability, and operational resilience. Traditional supply chain optimization approaches focus on single objectives, typically cost minimization, overlooking the inherent trade-offs between economic efficiency, carbon footprint reduction, and the ability to withstand disruptions. We propose a multi-objective optimization framework that integrates artificial intelligence techniques—specifically machine learning for demand forecasting and evolutionary algorithms for Pareto-optimal solution generation—to design a green, resilient, and multi-modal 4-echelon supply chain network specific to the Indian automotive industry.
 
-The network structure consists of suppliers, factories, distribution centers (DCs), and customer zones. The optimization model simultaneously minimizes total supply chain cost, minimizes carbon emissions, and maximizes resilience against disruptions. We employ Random Forest regression for accurate demand forecasting with enhanced feature engineering including lag variables, seasonal patterns, and rolling statistics. The multi-objective optimization is solved using the Non-dominated Sorting Genetic Algorithm II (NSGA-II), which generates a Pareto front of non-dominated solutions representing different trade-offs between the three objectives.
+The network structure consists of suppliers (Pune, Chennai, Manesar), factories (Gujarat, Haryana), distribution centers (DCs) across multiple states, and customer zones. The optimization model simultaneously minimizes total supply chain cost, minimizes carbon emissions, and maximizes resilience against disruptions. It introduces a critical transport mode decision variable (Road vs. Rail), allowing trade-offs between slower, greener rail lines and flexible, higher-emission road networks. We employ Random Forest regression for accurate demand forecasting with enhanced feature engineering including lag variables, seasonal patterns, and rolling statistics. The multi-objective optimization is solved using the Non-dominated Sorting Genetic Algorithm II (NSGA-II), which generates a Pareto front of non-dominated solutions. This is further supported by an interactive Streamlit-based Decision Support System (DSS) allowing dynamic visualization of network flows and performance metrics.
 
 To evaluate resilience, we implement a discrete-event simulation model using SimPy that simulates supplier and factory disruptions with realistic failure and recovery times. The simulation accounts for traffic congestion factors that affect both transport costs and emissions, as well as the availability of distribution centers. Our approach incorporates rerouting policies to mitigate the impact of disruptions.
 
@@ -39,18 +39,20 @@ The specific challenges include:
 2. **Demand uncertainty**: Accurate demand forecasting is critical for network design decisions.
 3. **Disruption modeling**: Realistic simulation of supplier and factory failures with probabilistic failure and recovery times.
 4. **Traffic congestion**: Dynamic congestion factors that affect transport costs, emissions, and delivery times.
-5. **Computational complexity**: Solving large-scale multi-objective problems with multiple echelons and constraints.
+5. **Multi-modal logistics**: Balancing the distinct cost, speed, and emission profiles of Road vs Rail transport modes.
+6. **Decision Support**: Developing a dynamic, interactive visualization system for complex Pareto choices.
+7. **Computational complexity**: Solving large-scale multi-objective problems with multiple echelons and constraints.
 
 ### 1.3 Research Objectives
 
 The primary objectives of this research are:
 
-1. **Develop a multi-objective optimization model** for a 4-echelon supply chain network that simultaneously minimizes cost, minimizes emissions, and maximizes resilience.
+1. **Develop a multi-objective optimization model** for a multi-modal 4-echelon supply chain network in the Indian automotive context that simultaneously minimizes cost, minimizes emissions, and maximizes resilience.
 2. **Implement AI-based demand forecasting** using Random Forest regression with enhanced feature engineering for accurate demand prediction.
 3. **Design a discrete-event simulation framework** to evaluate resilience under various disruption scenarios.
 4. **Integrate traffic congestion modeling** into cost, emission, and resilience calculations.
-5. **Generate Pareto-optimal solutions** using NSGA-II and extract representative solutions for decision-making.
-6. **Validate the framework** through computational experiments and sensitivity analysis.
+5. **Generate Pareto-optimal solutions** using NSGA-II and extract representative solutions.
+6. **Construct an Interactive Decision Support System** using Streamlit to facilitate stakeholder visualization and strategic trade-off analysis.
 
 ### 1.4 Research Contributions
 
@@ -181,12 +183,13 @@ This research fills this gap by developing a holistic framework that addresses a
 
 ### 3.1 Network Structure
 
-We consider a **4-echelon supply chain network** consisting of:
+We consider a **multi-modal 4-echelon supply chain network** mapped to the Indian automotive landscape, consisting of:
 
-1. **Suppliers (I)**: Raw material suppliers located at fixed geographic coordinates.
-2. **Factories (J)**: Manufacturing facilities that transform raw materials into finished products.
-3. **Distribution Centers (K)**: Warehouses that store inventory and distribute products to customers.
+1. **Suppliers (I)**: Raw material suppliers located at specific Indian auto hubs (e.g., Pune, Chennai, Manesar).
+2. **Factories (J)**: Manufacturing facilities situated in major industrial zones (e.g., Gujarat, Haryana).
+3. **Distribution Centers (K)**: Warehouses that store inventory and distribute products across major Indian states.
 4. **Customers (L)**: End-user demand zones with time-varying demand.
+5. **Transport Modes (M)**: Evaluated transport modes offering trade-offs between speed, cost, and emissions (Road vs. Rail).
 
 The network structure is illustrated in Figure 1 (see: `results/figures/network_topology.png`).
 
@@ -199,10 +202,10 @@ The network structure is illustrated in Figure 1 (see: `results/figures/network_
 
 #### 3.2.1 Decision Variables
 
-The optimization problem involves determining:
-- **x_ij**: Flow quantity from supplier i to factory j (units)
-- **y_jk**: Flow quantity from factory j to distribution center k (units)
-- **z_kl**: Flow quantity from distribution center k to customer l (units)
+The optimization problem involves determining flows across varied transport modes:
+- **x_ijm**: Flow quantity from supplier i to factory j via mode m (units)
+- **y_jkm**: Flow quantity from factory j to distribution center k via mode m (units)
+- **z_klm**: Flow quantity from distribution center k to customer l via mode m (units)
 
 All flows are continuous, non-negative variables.
 
@@ -310,6 +313,7 @@ We make the following assumptions:
 - **J**: Set of factories, indexed by j
 - **K**: Set of distribution centers, indexed by k
 - **L**: Set of customers, indexed by l
+- **M**: Set of transport modes (road, rail), indexed by m
 
 #### Parameters
 
@@ -340,14 +344,14 @@ We make the following assumptions:
 - **cfⱼₖ**: Congestion factor for route (j,k) (dimensionless, ≥ 1.0)
 - **cfₖₗ**: Congestion factor for route (k,l) (dimensionless, ≥ 1.0)
 
-**Cost Parameters:**
-- **t**: Transport cost per unit-kilometer ($/unit-km)
-- **τ**: Transport emission factor (kg CO₂/unit-km)
+**Cost and Emission Parameters by Mode:**
+- **tₘ**: Transport cost per unit-kilometer for mode m ($/unit-km)
+- **τₘ**: Transport emission factor for mode m (kg CO₂/unit-km)
 
 #### Decision Variables
-- **xᵢⱼ**: Flow from supplier i to factory j (units) ≥ 0
-- **yⱼₖ**: Flow from factory j to DC k (units) ≥ 0
-- **zₖₗ**: Flow from DC k to customer l (units) ≥ 0
+- **xᵢⱼₘ**: Flow from supplier i to factory j via mode m (units) ≥ 0
+- **yⱼₖₘ**: Flow from factory j to DC k via mode m (units) ≥ 0
+- **zₖₗₘ**: Flow from DC k to customer l via mode m (units) ≥ 0
 
 ### 4.2 Objective Functions
 
@@ -357,42 +361,42 @@ The total cost consists of five components:
 
 **1. Supplier Procurement Cost:**
 ```
-∑ᵢ ∑ⱼ sᵢ · xᵢⱼ
+∑ᵢ ∑ⱼ ∑ₘ sᵢ · xᵢⱼₘ
 ```
 
 **2. Production Cost:**
 ```
-∑ⱼ pⱼ · (∑ᵢ xᵢⱼ)
+∑ⱼ pⱼ · (∑ᵢ ∑ₘ xᵢⱼₘ)
 ```
 
 **3. Transportation Cost (Supplier to Factory):**
 ```
-∑ᵢ ∑ⱼ t · dᵢⱼ · cfᵢⱼ · xᵢⱼ
+∑ᵢ ∑ⱼ ∑ₘ tₘ · dᵢⱼ · cfᵢⱼ · xᵢⱼₘ
 ```
 
 **4. Transportation Cost (Factory to DC):**
 ```
-∑ⱼ ∑ₖ t · dⱼₖ · cfⱼₖ · yⱼₖ
+∑ⱼ ∑ₖ ∑ₘ tₘ · dⱼₖ · cfⱼₖ · yⱼₖₘ
 ```
 
 **5. Transportation Cost (DC to Customer):**
 ```
-∑ₖ ∑ₗ t · dₖₗ · cfₖₗ · zₖₗ
+∑ₖ ∑ₗ ∑ₘ tₘ · dₖₗ · cfₖₗ · zₖₗₘ
 ```
 
 **6. Inventory Holding Cost:**
 ```
-∑ₖ hₖ · (∑ⱼ yⱼₖ)
+∑ₖ hₖ · (∑ⱼ ∑ₘ yⱼₖₘ)
 ```
 
 **Total Cost Objective:**
 ```
-f₁ = ∑ᵢ ∑ⱼ sᵢ · xᵢⱼ
-   + ∑ⱼ pⱼ · (∑ᵢ xᵢⱼ)
-   + ∑ᵢ ∑ⱼ t · dᵢⱼ · cfᵢⱼ · xᵢⱼ
-   + ∑ⱼ ∑ₖ t · dⱼₖ · cfⱼₖ · yⱼₖ
-   + ∑ₖ ∑ₗ t · dₖₗ · cfₖₗ · zₖₗ
-   + ∑ₖ hₖ · (∑ⱼ yⱼₖ)
+f₁ = ∑ᵢ ∑ⱼ ∑ₘ sᵢ · xᵢⱼₘ
+   + ∑ⱼ pⱼ · (∑ᵢ ∑ₘ xᵢⱼₘ)
+   + ∑ᵢ ∑ⱼ ∑ₘ tₘ · dᵢⱼ · cfᵢⱼ · xᵢⱼₘ
+   + ∑ⱼ ∑ₖ ∑ₘ tₘ · dⱼₖ · cfⱼₖ · yⱼₖₘ
+   + ∑ₖ ∑ₗ ∑ₘ tₘ · dₖₗ · cfₖₗ · zₖₗₘ
+   + ∑ₖ hₖ · (∑ⱼ ∑ₘ yⱼₖₘ)
 ```
 
 #### 4.2.2 Total Emissions Minimization (f₂)
@@ -401,36 +405,36 @@ The total carbon emissions consist of:
 
 **1. Supplier Emissions:**
 ```
-∑ᵢ ∑ⱼ eᵢ · xᵢⱼ
+∑ᵢ ∑ⱼ ∑ₘ eᵢ · xᵢⱼₘ
 ```
 
 **2. Production Emissions:**
 ```
-∑ⱼ εⱼ · (∑ᵢ xᵢⱼ)
+∑ⱼ εⱼ · (∑ᵢ ∑ₘ xᵢⱼₘ)
 ```
 
 **3. Transportation Emissions (Supplier to Factory):**
 ```
-∑ᵢ ∑ⱼ τ · dᵢⱼ · cfᵢⱼ · xᵢⱼ
+∑ᵢ ∑ⱼ ∑ₘ τₘ · dᵢⱼ · cfᵢⱼ · xᵢⱼₘ
 ```
 
 **4. Transportation Emissions (Factory to DC):**
 ```
-∑ⱼ ∑ₖ τ · dⱼₖ · cfⱼₖ · yⱼₖ
+∑ⱼ ∑ₖ ∑ₘ τₘ · dⱼₖ · cfⱼₖ · yⱼₖₘ
 ```
 
 **5. Transportation Emissions (DC to Customer):**
 ```
-∑ₖ ∑ₗ τ · dₖₗ · cfₖₗ · zₖₗ
+∑ₖ ∑ₗ ∑ₘ τₘ · dₖₗ · cfₖₗ · zₖₗₘ
 ```
 
 **Total Emissions Objective:**
 ```
-f₂ = ∑ᵢ ∑ⱼ eᵢ · xᵢⱼ
-   + ∑ⱼ εⱼ · (∑ᵢ xᵢⱼ)
-   + ∑ᵢ ∑ⱼ τ · dᵢⱼ · cfᵢⱼ · xᵢⱼ
-   + ∑ⱼ ∑ₖ τ · dⱼₖ · cfⱼₖ · yⱼₖ
-   + ∑ₖ ∑ₗ τ · dₖₗ · cfₖₗ · zₖₗ
+f₂ = ∑ᵢ ∑ⱼ ∑ₘ eᵢ · xᵢⱼₘ
+   + ∑ⱼ εⱼ · (∑ᵢ ∑ₘ xᵢⱼₘ)
+   + ∑ᵢ ∑ⱼ ∑ₘ τₘ · dᵢⱼ · cfᵢⱼ · xᵢⱼₘ
+   + ∑ⱼ ∑ₖ ∑ₘ τₘ · dⱼₖ · cfⱼₖ · yⱼₖₘ
+   + ∑ₖ ∑ₗ ∑ₘ τₘ · dₖₗ · cfₖₗ · zₖₗₘ
 ```
 
 #### 4.2.3 Resilience Maximization (f₃)
@@ -574,47 +578,47 @@ The overall framework is illustrated in Figure 3.
 
 #### 5.2.1 Network Data
 
-We generate synthetic data for a test network with:
-- **3 Suppliers** (S1, S2, S3)
-- **2 Factories** (F1, F2)
-- **3 Distribution Centers** (D1, D2, D3)
+We generate geographic data for a multi-modal test network anchored on real Indian automotive hubs:
+- **3 Suppliers** (S1: Pune, S2: Chennai, S3: Manesar)
+- **2 Factories** (F1: Gujarat, F2: Haryana)
+- **3 Distribution Centers** (D1, D2, D3 across diverse states)
 - **5 Customers** (C1, C2, C3, C4, C5)
 
 **Supplier Data:**
-- Locations: Random geographic coordinates (latitude, longitude)
+- Locations: Grounded geodesic coordinates (latitude, longitude) based on India bounds.
 - Capacity: Uniform(200, 400) units
 - Cost per unit: Uniform(10, 20) $/unit
 - Carbon emission factor: Uniform(0.5, 1.5) kg CO₂/unit
 
 **Factory Data:**
-- Locations: Random geographic coordinates
+- Locations: Grounded geodesic coordinates based on major Indian auto-manufacturing states.
 - Capacity: Uniform(300, 500) units
 - Production cost: Uniform(15, 25) $/unit
 - Production emission factor: Uniform(1.0, 2.0) kg CO₂/unit
 
 **DC Data:**
-- Locations: Random geographic coordinates
+- Locations: Grounded geodesic coordinates.
 - Capacity: Uniform(250, 400) units
 - Holding cost: Uniform(2, 5) $/unit
 
 **Customer Data:**
-- Locations: Random geographic coordinates
+- Locations: Grounded geodesic coordinates.
 - Demand: Time-varying (see Section 5.2.2)
 
-#### 5.2.2 Distance and Congestion Matrices
+#### 5.2.2 Multi-modal Distance and Congestion Matrices
 
-Distances are calculated using geodesic distance (great-circle distance) between geographic coordinates:
+Distances are calculated using precise geodesic distance (great-circle distance) between geographic coordinates, explicitly separated into distinct logical routes spanning **Road** and **Rail** modes:
 
-**Supplier-Factory Distances:**
-- Distance matrix: dᵢⱼ for all i ∈ I, j ∈ J
-- Congestion factor: Uniform(1.0, 1.5) for each route
+**Supplier-Factory Distances (Road & Rail):**
+- Distance matrix: dᵢⱼₘ for all i ∈ I, j ∈ J, m ∈ M
+- Congestion factor: Uniform(1.0, 1.5) varied dynamically across road geometries; Rail maintains fixed capacities.
 
-**Factory-DC Distances:**
-- Distance matrix: dⱼₖ for all j ∈ J, k ∈ K
-- Congestion factor: Uniform(1.0, 1.6) for each route
+**Factory-DC Distances (Road & Rail):**
+- Distance matrix: dⱼₖₘ for all j ∈ J, k ∈ K, m ∈ M
+- Congestion factor: Uniform(1.0, 1.6) for road modes.
 
-**DC-Customer Distances:**
-- Distance matrix: dₖₗ for all k ∈ K, l ∈ L
+**DC-Customer Distances (Road):**
+- Distance matrix: dₖₗₘ for all k ∈ K, l ∈ L. (Typically restricted to Road 'm' to fulfill last-mile constraints).
 - Congestion factor: Uniform(1.0, 1.7) for each route
 
 Distance matrices are visualized in Figure 4 (see: `results/figures/distance_heatmaps.png`).
@@ -842,6 +846,13 @@ Simulation results are shown in Figure 8 (see: `results/figures/simulation_resul
 > [PLACEHOLDER: Insert `results/figures/simulation_results.png` here]
 > 
 > Bar charts showing average fill rate, minimum fill rate, resilience score, and average number of disruptions per simulation run.
+
+### 5.6 Interactive Decision Support System (DSS)
+
+To facilitate complex multi-objective decision-making, we developed a dynamic Decision Support System (DSS) utilizing the Streamlit web framework. The dashboard bridges the gap between algorithm abstractions and practical geographic strategies:
+- **Multi-Modal Flow Geographic Map:** Interactive spatial projections of the optimized supply chain topology accurately localized over a geographical map of India, color coding distinct route edges into Road vs. Rail.
+- **Interactive 3D Pareto Front:** Web-enabled 3D scatter plots rendering the exact Non-Dominated trade-off surface computed by `pymoo`, permitting stakeholders to dynamically filter and rotate constraints.
+- **KPI Analysis Tabs:** Real-time rendering of Key Performance Indicators (Total Cost, Carbon footprints, Resilience factors) depending directly on which representative archetype (Min Emissions, Min Cost, Utopia) a stakeholder evaluates.
 
 ---
 

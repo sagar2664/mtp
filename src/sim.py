@@ -59,7 +59,7 @@ class DisruptionSimulation:
         
         # Baseline demand: use total planned deliveries (sum of z flows)
         self.baseline_total_demand = 0.0
-        for (_, _), z_val in self.flows.get('z', {}).items():
+        for k, z_val in self.flows.get('z', {}).items():
             self.baseline_total_demand += float(z_val)
 
         # Rerouting efficiency (fraction of lost volume that can be reassigned to available DCs)
@@ -159,9 +159,22 @@ class DisruptionSimulation:
             total_demand = self.baseline_total_demand if self.baseline_total_demand > 0 else 1.0
 
             # Compute DC availability based on upstream x and y flows and node status
-            x = self.flows.get('x', {})
-            y = self.flows.get('y', {})
-            z = self.flows.get('z', {})
+            x_raw = self.flows.get('x', {})
+            y_raw = self.flows.get('y', {})
+            z_raw = self.flows.get('z', {})
+            
+            x = {}
+            for k_tuple, v in x_raw.items():
+                k_agg = (k_tuple[0], k_tuple[1]) if len(k_tuple) >= 2 else k_tuple
+                x[k_agg] = x.get(k_agg, 0.0) + float(v)
+            y = {}
+            for k_tuple, v in y_raw.items():
+                k_agg = (k_tuple[0], k_tuple[1]) if len(k_tuple) >= 2 else k_tuple
+                y[k_agg] = y.get(k_agg, 0.0) + float(v)
+            z = {}
+            for k_tuple, v in z_raw.items():
+                k_agg = (k_tuple[0], k_tuple[1]) if len(k_tuple) >= 2 else k_tuple
+                z[k_agg] = z.get(k_agg, 0.0) + float(v)
             
             # For each factory j, compute available inflow fraction from suppliers
             factory_in_avail = {}
@@ -308,8 +321,8 @@ def simulate_single_node_failure(
         # Remove all x_ij flows from this supplier
         x_flows = flows.get('x', {})
         available_flows['x'] = {
-            (i, j): val for (i, j), val in x_flows.items()
-            if i != failed_node
+            k: val for k, val in x_flows.items()
+            if k[0] != failed_node
         }
         available_flows['y'] = flows.get('y', {})
         available_flows['z'] = flows.get('z', {})
@@ -318,18 +331,18 @@ def simulate_single_node_failure(
         x_flows = flows.get('x', {})
         y_flows = flows.get('y', {})
         available_flows['x'] = {
-            (i, j): val for (i, j), val in x_flows.items()
-            if j != failed_node
+            k: val for k, val in x_flows.items()
+            if k[1] != failed_node
         }
         available_flows['y'] = {
-            (j, k): val for (j, k), val in y_flows.items()
-            if j != failed_node
+            k: val for k, val in y_flows.items()
+            if k[0] != failed_node
         }
         available_flows['z'] = flows.get('z', {})
     
     # Calculate total available flow to customers (simplified via z flows)
     total_available = 0
-    for (k, l), z_val in available_flows['z'].items():
+    for k, z_val in available_flows['z'].items():
         total_available += float(z_val)
     
     # If some flows are missing, we might not satisfy all demand
