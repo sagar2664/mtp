@@ -16,7 +16,11 @@ try:
     import plotly.graph_objects as go
     from plotly.subplots import make_subplots
 except ModuleNotFoundError:
-    subprocess.check_call([sys.executable, "-m", "pip", "install", "plotly"])
+    _deps = os.path.join(os.path.dirname(__file__), ".deps")
+    subprocess.check_call(
+        [sys.executable, "-m", "pip", "install", "--target", _deps, "plotly==5.24.1"]
+    )
+    sys.path.insert(0, _deps)
     import plotly.express as px
     import plotly.graph_objects as go
     from plotly.subplots import make_subplots
