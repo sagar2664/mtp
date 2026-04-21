@@ -1,0 +1,52 @@
+{
+  "experiment_name": "green_resilient_scn_4echelon",
+  "network_structure": {
+    "n_suppliers": 3,
+    "n_factories": 2,
+    "n_dcs": 3,
+    "n_customers": 5
+  },
+  "optimization": {
+    "algorithm": "NSGA-II",
+    "n_pareto_solutions": 105,
+    "execution_time_seconds": 7.782751083374023
+  },
+  "representative_solutions": [
+    {
+      "label": "Min Cost",
+      "cost": 848800.7061433342,
+      "emissions": 32909.532895736185,
+      "resilience": 0.5423277231418209
+    },
+    {
+      "label": "Min Emissions",
+      "cost": 966774.6601125452,
+      "emissions": 22053.525362616572,
+      "resilience": 0.4892701817810179
+    },
+    {
+      "label": "Balanced (Utopia)",
+      "cost": 965232.7748114641,
+      "emissions": 38212.69795044361,
+      "resilience": 0.5611757089457121
+    },
+    {
+      "label": "Balanced (Knee)",
+      "cost": 37309289.43713729,
+      "emissions": 774012.9991259953,
+      "resilience": 0.566518771305174
+    }
+  ],
+  "simulation_results": {
+    "average_fill_rate": 0.8119367396314691,
+    "min_fill_rate": 0.655979899869298,
+    "average_n_disruptions": 3.04,
+    "n_runs": 100,
+    "resilience_score": 0.655979899869298
+  },
+  "forecast_accuracy": {
+    "MAE": 30.134537295171913,
+    "RMSE": 39.39834173058842,
+    "MAPE": 12.161468809012064
+  }
+}

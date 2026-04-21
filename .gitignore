@@ -34,10 +34,9 @@ ENV/
 .coverage
 htmlcov/
 
-# Results directory
-results/
-*.png
-*.pdf
+# Results — keep data and figures, ignore zip
+results/figures.zip
+.pandoc/
 
 # IDE
 .vscode/
