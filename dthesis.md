@@ -624,12 +624,18 @@ Each run models facility state transitions (operational $\leftrightarrow$ failed
 
 ### 5.6 Decision Support System
 
-A Streamlit dashboard provides interactive trade-off visualisation:
+A Streamlit-based interactive Decision Support System (DSS) was developed to enable stakeholders to explore optimisation results without requiring programming expertise. The dashboard is deployed on Streamlit Community Cloud and accessible at:
 
-- Geographic network map with mode-coloured flow arcs
-- Interactive 3D Pareto front with highlighted representative solutions
-- Sankey flow diagrams, sunburst mode-share charts, and radar comparisons
-- Simulation gauge indicators and parameter tables
+> **Live Dashboard:** https://sagar2664-mtp.streamlit.app
+
+The DSS provides four modules:
+
+1. **Overview** — KPI cards, convergence plots, and summary statistics for the optimisation run.
+2. **Network Map** — Geographic visualisation of the supply chain with mode-coloured flow arcs (blue: rail, green: road). Users can switch between representative solutions to observe how flow patterns change across the Pareto front.
+3. **Pareto Analysis** — Interactive 3D scatter plot of the Pareto front with cost, emissions, and resilience axes. Includes bar charts, radar comparisons, and solution filtering.
+4. **Resilience Simulation** — Gauge indicators for average fill rate, worst-case fill rate, and disruption frequency from the Monte Carlo simulation.
+
+The source code is publicly available at: https://github.com/sagar2664/mtp
 
 \newpage
 
@@ -802,10 +808,14 @@ This thesis developed an integrated framework for multi-objective supply chain n
 | Pipeline | `results/run_experiment.py` | End-to-end experiment runner |
 | Figures | `results/generate_figures.py` | Publication-quality plots |
 
+**Source Code Repository:** https://github.com/sagar2664/mtp
+
+**Live Dashboard:** https://sagar2664-mtp.streamlit.app
+
 **Reproducing results:**
 
 ```
-pip install pyomo pymoo scikit-learn simpy streamlit pandas numpy geopy plotly
+pip install -r requirements.txt
 python results/run_experiment.py
 streamlit run src/dashboard.py
 ```
